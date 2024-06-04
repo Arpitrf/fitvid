@@ -25,6 +25,7 @@ class MultiGaussianLSTM(nn.Module):
         super(MultiGaussianLSTM, self).__init__()
 
         # assert num_layers == 1
+        # print("input sizeeeee, hidden sizeeee: ", input_size, hidden_size)
         self.embed = nn.Linear(input_size, hidden_size)
         self.mean = nn.Linear(hidden_size, output_size)
         self.logvar = nn.Linear(hidden_size, output_size)
@@ -35,6 +36,9 @@ class MultiGaussianLSTM(nn.Module):
 
     def forward(self, x, states):
         # assume x to only contain one timestep i.e. (bs, feature_dim)
+        # added by Arpit
+        x = x.float()
+
         x = self.embed(x)
         x = x.view((1,) + x.shape)
         x, new_states = self.layers_0(x, states)
@@ -283,11 +287,15 @@ class FitVid(nn.Module):
         compute_metrics=False,
     ):
         batch_size, video_len = video.shape[0], video.shape[1]
+        # print("11video.shape: ", video.shape)
         video = video.view(
             (batch_size * video_len,) + video.shape[2:]
         )  # collapse first two dims
+        # print("22video.shape: ", video.shape)
         hidden, skips = self.encoder(video)
+        # print("11hidden, skips: ", hidden.shape)
         hidden = hidden.view((batch_size, video_len) + hidden.shape[1:])
+        # print("22hidden, skips: ", hidden.shape)
         video = video.view(
             (
                 batch_size,
@@ -295,6 +303,7 @@ class FitVid(nn.Module):
             )
             + video.shape[1:]
         )  # reconstruct first two dims
+        # print("33video.shape: ", video.shape)
         skips = {
             k: skips[k].view(
                 (
@@ -337,6 +346,7 @@ class FitVid(nn.Module):
         metrics = dict()
         preds = dict(rgb=preds)
         for loss, weight in self.loss_weights.items():
+            print("loss, weight: ", loss, weight)
             if loss == "kld":
                 total_loss += weight * kld
                 metrics["loss/kld"] = kld
@@ -541,7 +551,10 @@ class FitVid(nn.Module):
         video = video.view(
             (batch_size * video_len,) + video.shape[2:]
         )  # collapse first two dims
+        # print("video.shape: ", video.shape)
         hidden, skips = self.encoder(video)
+        # print("hidden, skips: ", hidden.shape, skips.keys())
+        # print("self.n_past: ", self.n_past)
         skips = {
             k: skips[k].view(
                 (
@@ -552,9 +565,11 @@ class FitVid(nn.Module):
             )[:, self.n_past - 1]
             for k in skips.keys()
         }
+        # print("skpis: ", skips.keys())
         # evaluating
         preds = []
         hidden = hidden.view((batch_size, video_len) + hidden.shape[1:])
+        print("self.n_past:", self.n_past)
         if autoregressive:
             for i in range(1, video_len):
                 h, _ = hidden[:, i - 1], hidden[:, i]
@@ -566,10 +581,16 @@ class FitVid(nn.Module):
                     )
                 else:
                     z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)
+                # print("actions shapeee: ", actions.shape)
+                # print("to make inp: ", h.shape, actions[:, i - 1].shape, z_t.shape)
                 inp = self.get_input(h, actions[:, i - 1], z_t)
+                # print("input to the frame predictor: ", inp.shape, pred_state)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
+                # print("h_pred shape: ", h_pred.shape)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
+                # print("h_pred shape: ", h_pred.shape)
                 pred = self.decoder(h_pred[None, :], skips)[0]
+                # print("pred shape: ", pred.shape)
                 preds.append(pred)
             preds = torch.stack(preds, axis=1)
         else:

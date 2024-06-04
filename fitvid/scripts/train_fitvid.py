@@ -80,7 +80,7 @@ flags.DEFINE_string(
 
 # Model saving
 flags.DEFINE_string("output_dir", None, "Path to model checkpoints/summaries.")
-flags.DEFINE_integer("save_freq", 10, "number of steps between checkpoints")
+flags.DEFINE_integer("save_freq", 25, "number of steps between checkpoints")
 flags.DEFINE_integer("save_at_num_steps", 150000, "save checkpoint at number of steps")
 flags.DEFINE_boolean(
     "wandb_online", None, "Use wandb online mode (probably should disable on cluster)"
@@ -95,9 +95,9 @@ flags.DEFINE_boolean("additional_finetune_data", None, "using finetuning data wi
 flags.DEFINE_boolean("only_finetune", None, "only finetuning data with robonet")
 flags.DEFINE_string("cache_mode", "low_dim", "Dataset cache mode")
 flags.DEFINE_string(
-    "camera_view", "agentview", 'Camera view of data to load. Default is "agentview".'
+    "camera_view", "agentview_shift_2", 'Camera view of data to load. Default is "agentview".'
 )
-flags.DEFINE_list("image_size", [], "H, W of images")
+flags.DEFINE_list("image_size", [64, 64], "H, W of images")
 flags.DEFINE_boolean("has_segmentation", True, "Does dataset have segmentation masks")
 
 # depth objective
@@ -154,20 +154,27 @@ def load_data(
     else:
         image_size = None
     from fitvid.data.robomimic_data import load_dataset_robomimic_torch
+    # print("image_size-------", image_size, type(image_size))
+    # return load_dataset_robomimic_torch(
+    #     dataset_files,
+    #     FLAGS.batch_size,
+    #     video_len,
+    #     image_size,
+    #     data_type,
+    #     depth,
+    #     normal,
+    #     view=FLAGS.camera_view,
+    #     cache_mode=FLAGS.cache_mode,
+    #     seg=seg,
+    #     only_depth=FLAGS.only_depth,
+    #     augmentation=augmentation,
+    # )
+
+    dataset_path = "/home/arpit/test_projects/OmniGibson/dynamics_model_data/succ.hdf5"
+    print("video_len: ", video_len)
     return load_dataset_robomimic_torch(
-        dataset_files,
-        FLAGS.batch_size,
-        video_len,
-        image_size,
-        data_type,
-        depth,
-        normal,
-        view=FLAGS.camera_view,
-        cache_mode=FLAGS.cache_mode,
-        seg=seg,
-        only_depth=FLAGS.only_depth,
-        augmentation=augmentation,
-    )
+        [dataset_path], FLAGS.batch_size, video_len, image_size, phase=None, depth=False, normal=False, view="rgb", seg=False, cache_mode=None)
+
 
 
 def get_most_recent_checkpoint(dir):
@@ -320,6 +327,10 @@ def main(argv):
     else:
         image_augmentation = None
 
+    FLAGS.dataset_file = ['/home/arpit/test_projects/vp2/vp2/robosuite_benchmark_tasks/5k_slice_rendered_256.hdf5']
+    print("Flags.hdf5_data: ", FLAGS.hdf5_data)
+    print("Flags.dataset_file: ", FLAGS.dataset_file)
+
     if FLAGS.hdf5_data:
         data_loader = load_hdf5_data(
             FLAGS.dataset_file,
@@ -369,6 +380,7 @@ def main(argv):
         )
 
     if FLAGS.adamw_1cycle:
+        # print("111111111111111")
         optimizer = torch.optim.AdamW(
             model.parameters(),
             lr=FLAGS.lr,
@@ -382,6 +394,7 @@ def main(argv):
             steps_per_epoch=min(FLAGS.train_epoch_max_length, len(data_loader)),
         )
     else:
+        # print("222222222222222")
         optimizer = torch.optim.Adam(
             model.parameters(),
             lr=FLAGS.lr,
@@ -418,6 +431,9 @@ def main(argv):
 
     scaler = GradScaler()
 
+    # added by arpit
+    FLAGS.train_epoch_max_length = min(FLAGS.train_epoch_max_length, len(data_loader))
+
     for epoch in range(resume_epoch + 1, num_epochs):
         print(f"\nEpoch {epoch} / {num_epochs}")
         print("Evaluating")
@@ -427,9 +443,14 @@ def main(argv):
             eval_metrics = dict()
             wandb_log = dict()
             total_test_batches = len(test_data_loader)
+            total_train_batches = len(data_loader)
+            print("type(data_loader): ", type(data_loader))
             print(f"Total test batches: {total_test_batches}")
+            print(f"Total train batches: {total_train_batches}")
             for iter_item in enumerate(tqdm(test_data_loader)):
                 test_batch_idx, batch = iter_item
+                # print("batch: ", batch.keys())
+                # print("batch[video]: ", batch['video'].shape)
                 batch = dict_to_cuda(batch)
                 with autocast() if FLAGS.fp16 else ExitStack() as ac:
                     metrics, eval_preds = model.module.evaluate(
@@ -437,6 +458,7 @@ def main(argv):
                     )
                     if test_batch_idx < num_batch_to_save:
                         for ag_type, eval_pred in eval_preds.items():
+                            print("eval_pred[rgb]: ", eval_pred["rgb"].shape)
                             if depth_predictor_kwargs:
                                 with torch.no_grad():
                                     gt_depth_preds = model.module.depth_predictor(
@@ -570,6 +592,7 @@ def main(argv):
 
             # get segmentations from data if they exist
             batch_segmentations = batch.get("segmentation", None)
+            print("batch[video]: ", batch["video"].shape, batch["actions"].shape, batch_segmentations)
             inputs = batch["video"], batch["actions"], batch_segmentations
 
             if depth_predictor_kwargs:
@@ -587,6 +610,7 @@ def main(argv):
                 loss, preds, metrics = model(
                     *inputs, compute_metrics=(batch_idx % 200 == 0)
                 )
+                print("predsss[rgb]: ", preds['rgb'].shape)
 
             if NGPU > 1:
                 loss = loss.mean()

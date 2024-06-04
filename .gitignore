@@ -1,3 +1,6 @@
 tmp/
 slurm*
 __pycache__/
+output/
+run_*
+wandb/
