@@ -569,7 +569,7 @@ class FitVid(nn.Module):
         # evaluating
         preds = []
         hidden = hidden.view((batch_size, video_len) + hidden.shape[1:])
-        print("self.n_past:", self.n_past)
+        # print("self.n_past:", self.n_past)
         if autoregressive:
             for i in range(1, video_len):
                 h, _ = hidden[:, i - 1], hidden[:, i]

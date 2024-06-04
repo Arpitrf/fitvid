@@ -353,7 +353,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         demo_index_offset = 0 if self.pad_frame_stack else (self.n_frame_stack - 1)
         
         # remove later
-        demo_index_offset = 4
+        # demo_index_offset = 4
 
         index_in_demo = index - demo_start_index + demo_index_offset
         # print("index, index_in_demo: ", index, index_in_demo)

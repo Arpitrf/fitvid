@@ -26,9 +26,9 @@ FLAGS = flags.FLAGS
 flags.DEFINE_integer("seed", 0, "Random seed.")  # changed
 flags.DEFINE_boolean("debug", False, "Debug mode.")  # changed
 flags.DEFINE_integer("batch_size", 32, "Batch size.")  # changed
-flags.DEFINE_integer("n_past", 2, "Number of past frames.")
+flags.DEFINE_integer("n_past", 1, "Number of past frames.")
 flags.DEFINE_integer(
-    "n_future", 10, "Number of future frames."
+    "n_future", 7, "Number of future frames."
 )  # not used, inferred directly from data
 flags.DEFINE_integer("num_epochs", 1000, "Number of steps to train for.")
 flags.DEFINE_integer(
@@ -73,7 +73,7 @@ flags.DEFINE_integer(
     "num_base_filters", 32, "num_filters = num_base_filters * 2^layer_index."
 )  # 64
 flags.DEFINE_integer("expand", 1, "multiplier on decoder's num_filters.")  # 4
-flags.DEFINE_integer("action_size", 4, "number of actions")  # 4
+flags.DEFINE_integer("action_size", 7, "number of actions")  # 4
 flags.DEFINE_string(
     "skip_type", "residual", "skip type: residual, concat, no_skip, pixel_residual"
 )  # residual
@@ -170,10 +170,10 @@ def load_data(
     #     augmentation=augmentation,
     # )
 
-    dataset_path = "/home/arpit/test_projects/OmniGibson/dynamics_model_data/succ.hdf5"
-    print("video_len: ", video_len)
+    # dataset_path = "/home/arpit/test_projects/OmniGibson/dynamics_model_data/succ.hdf5"
+    # print("video_len: ", video_len)
     return load_dataset_robomimic_torch(
-        [dataset_path], FLAGS.batch_size, video_len, image_size, phase=None, depth=False, normal=False, view="rgb", seg=False, cache_mode=None)
+        dataset_files, FLAGS.batch_size, video_len, image_size, phase=None, depth=False, normal=False, view="rgb", seg=False, cache_mode=None)
 
 
 
@@ -327,9 +327,9 @@ def main(argv):
     else:
         image_augmentation = None
 
-    FLAGS.dataset_file = ['/home/arpit/test_projects/vp2/vp2/robosuite_benchmark_tasks/5k_slice_rendered_256.hdf5']
-    print("Flags.hdf5_data: ", FLAGS.hdf5_data)
-    print("Flags.dataset_file: ", FLAGS.dataset_file)
+    # FLAGS.dataset_file = ['/home/arpit/test_projects/vp2/vp2/robosuite_benchmark_tasks/5k_slice_rendered_256.hdf5']
+    # print("Flags.hdf5_data: ", FLAGS.hdf5_data)
+    # print("Flags.dataset_file: ", FLAGS.dataset_file)
 
     if FLAGS.hdf5_data:
         data_loader = load_hdf5_data(
@@ -458,7 +458,7 @@ def main(argv):
                     )
                     if test_batch_idx < num_batch_to_save:
                         for ag_type, eval_pred in eval_preds.items():
-                            print("eval_pred[rgb]: ", eval_pred["rgb"].shape)
+                            # print("eval_pred[rgb]: ", eval_pred["rgb"].shape)
                             if depth_predictor_kwargs:
                                 with torch.no_grad():
                                     gt_depth_preds = model.module.depth_predictor(
