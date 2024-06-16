@@ -87,6 +87,8 @@ class FitVid(nn.Module):
     """FitVid video predictor."""
 
     def __init__(self, **kwargs):
+        print("in fitvid init!!")
+        print("kwargs: ", kwargs)
         super(FitVid, self).__init__()
         self.config = kwargs
         model_kwargs = kwargs["model_kwargs"]

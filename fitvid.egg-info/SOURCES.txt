@@ -8,6 +8,7 @@ fitvid.egg-info/dependency_links.txt
 fitvid.egg-info/top_level.txt
 fitvid/data/__init__.py
 fitvid/data/hdf5_data_loader.py
+fitvid/data/og_dataset.py
 fitvid/data/robomimic_data.py
 fitvid/data/robonet.py
 fitvid/model/__init__.py

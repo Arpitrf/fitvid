@@ -154,7 +154,6 @@ def load_data(
     else:
         image_size = None
     from fitvid.data.robomimic_data import load_dataset_robomimic_torch
-    # print("image_size-------", image_size, type(image_size))
     # return load_dataset_robomimic_torch(
     #     dataset_files,
     #     FLAGS.batch_size,
