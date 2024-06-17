@@ -348,7 +348,7 @@ class FitVid(nn.Module):
         metrics = dict()
         preds = dict(rgb=preds)
         for loss, weight in self.loss_weights.items():
-            print("loss, weight: ", loss, weight)
+            # print("loss, weight: ", loss, weight)
             if loss == "kld":
                 total_loss += weight * kld
                 metrics["loss/kld"] = kld

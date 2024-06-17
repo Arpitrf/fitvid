@@ -112,7 +112,7 @@ def get_data_loader(
             hdf5_cache_mode=cache_mode,  # cache dataset in memory to avoid repeated file i/o
             hdf5_use_swmr=True,
             hdf5_normalize_obs=False,
-            filter_by_attribute=None,  # filter either train or validation data
+            filter_by_attribute=phase,  # filter either train or validation data
             image_size=video_dims,
         )
 
@@ -163,10 +163,10 @@ def load_dataset_robomimic_torch(
     postprocess_fn=None,
     shuffle=True
 ):
-    # assert phase in [
-    #     "train",
-    #     "valid",
-    # ], f"Phase is not one of the acceptable values! Got {phase}"
+    assert phase in [
+        "train",
+        "valid",
+    ], f"Phase is not one of the acceptable values! Got {phase}"
 
     def prepare_data(input_batch):
         # prepare_data is a custom collate function which not only batches the data from the dataset, but also

@@ -172,7 +172,7 @@ def load_data(
     # dataset_path = "/home/arpit/test_projects/OmniGibson/dynamics_model_data/succ.hdf5"
     # print("video_len: ", video_len)
     return load_dataset_robomimic_torch(
-        dataset_files, FLAGS.batch_size, video_len, image_size, phase=None, depth=False, normal=False, view="rgb", seg=False, cache_mode=None)
+        dataset_files, FLAGS.batch_size, video_len, image_size, phase=data_type, depth=False, normal=False, view="rgb", seg=False, cache_mode=None)
 
 
 
@@ -591,7 +591,7 @@ def main(argv):
 
             # get segmentations from data if they exist
             batch_segmentations = batch.get("segmentation", None)
-            print("batch[video]: ", batch["video"].shape, batch["actions"].shape, batch_segmentations)
+            # print("batch[video]: ", batch["video"].shape, batch["actions"].shape, batch_segmentations)
             inputs = batch["video"], batch["actions"], batch_segmentations
 
             if depth_predictor_kwargs:
@@ -609,7 +609,7 @@ def main(argv):
                 loss, preds, metrics = model(
                     *inputs, compute_metrics=(batch_idx % 200 == 0)
                 )
-                print("predsss[rgb]: ", preds['rgb'].shape)
+                # print("predsss[rgb]: ", preds['rgb'].shape)
 
             if NGPU > 1:
                 loss = loss.mean()
