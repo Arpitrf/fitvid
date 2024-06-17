@@ -101,6 +101,7 @@ def get_data_loader(
             obs_keys=obs_keys,  # observations we want to appear in batches
             dataset_keys=(  # can optionally specify more keys here if they should appear in batches
                 "actions",
+                "grasped"
             ),
             load_next_obs=False,
             frame_stack=1,
@@ -112,17 +113,19 @@ def get_data_loader(
             hdf5_cache_mode=cache_mode,  # cache dataset in memory to avoid repeated file i/o
             hdf5_use_swmr=True,
             hdf5_normalize_obs=False,
-            filter_by_attribute=None,  # filter either train or validation data
+            filter_by_attribute=phase,  # filter either train or validation data
             image_size=video_dims,
         )
 
-        # temp = dataset[78]
+        # temp = dataset[0]
         # print("datasettttt: ", temp.keys())
         # print("dataset[actions]: ", temp['actions'].shape, type(temp['actions'][0][0]))
+        # print("dataset[grasped]: ", temp['grasped'])
         # print("dataset[dones]: ", temp['dones'], type(temp['dones'][0]))
         # print("dataset[rewards]: ", temp['rewards'], type(temp['rewards'][0]))
-        # print("dataset[obs]: ", temp['obs']['agentview_shift_2_image'].shape, temp['obs'].keys())
-    
+        # print("dataset[obs]: ", temp['obs'].keys(), temp['obs']['rgb'].shape)
+        # input()
+   
         all_datasets.append(dataset)
         print(
             f"\n============= Created Dataset {i + 1} out of {len(dataset_paths)} ============="
@@ -133,7 +136,7 @@ def get_data_loader(
     # print("all_data")
     dataset = ConcatDataset(all_datasets)
     # print("type(dataset): ", type(dataset))
-    print("batch_size: ", batch_size)
+    # print("batch_size: ", batch_size)
     data_loader = DataLoader(
         dataset=dataset,
         sampler=None,  # no custom sampling logic (uniform sampling)
@@ -163,10 +166,11 @@ def load_dataset_robomimic_torch(
     postprocess_fn=None,
     shuffle=True
 ):
-    # assert phase in [
-    #     "train",
-    #     "valid",
-    # ], f"Phase is not one of the acceptable values! Got {phase}"
+    print("phaseeeeeeeeeeeee: ", phase)
+    assert phase in [
+        "train",
+        "valid",
+    ], f"Phase is not one of the acceptable values! Got {phase}"
 
     def prepare_data(input_batch):
         # prepare_data is a custom collate function which not only batches the data from the dataset, but also
@@ -246,6 +250,11 @@ def load_dataset_robomimic_torch(
         if "video" in data_dict:
             # Normalize to [0, 1]
             data_dict["video"] = data_dict["video"] / 255.0
+
+        # added by Arpit
+        xs["grasped"] = xs["grasped"].unsqueeze(2)
+        # print("xs_grasped.shape: ", type(xs['grasped']), xs['grasped'].shape)
+        data_dict['grasped'] = xs["grasped"]
 
         if postprocess_fn:
             data_dict = postprocess_fn(data_dict)

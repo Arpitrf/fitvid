@@ -1,6 +1,7 @@
 import numpy as np
 import torch.nn as nn
 import torch
+import torch.nn.functional as F
 
 
 class SEBlock(nn.Module):
@@ -339,3 +340,16 @@ class ModularDecoder(nn.Module):
             )
         else:
             return x  # for VAE
+        
+class GraspedFCN(nn.Module):
+    def __init__(self):
+        super(GraspedFCN, self).__init__()
+        self.fc1 = nn.Linear(128, 64)  # First hidden layer
+        self.fc2 = nn.Linear(64, 32)   # Second hidden layer
+        self.output = nn.Linear(32, 1) # Output layer
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x)) # Apply ReLU activation after the first hidden layer
+        x = F.relu(self.fc2(x)) # Apply ReLU activation after the second hidden layer
+        x = self.output(x)      # Output layer
+        return x

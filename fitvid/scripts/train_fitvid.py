@@ -51,16 +51,18 @@ flags.DEFINE_boolean(
 flags.DEFINE_float("weight_decay", 0.0, "weight decay value")
 flags.DEFINE_float("adam_eps", 1e-8, "epsilon parameter for Adam optimizer")
 flags.DEFINE_boolean("stochastic", True, "Use a stochastic model.")
-flags.DEFINE_boolean("multistep", False, "Multi-step training.")  # changed
+flags.DEFINE_boolean("multistep", True, "Multi-step training.")  # changed
 flags.DEFINE_boolean(
     "fp16", False, "Use lower precision training for perf improvement."
 )  # changed
 flags.DEFINE_float("rgb_weight", 1, "Weight on rgb objective (default 1).")
+flags.DEFINE_float("grasped_weight", 1, "Weight on grasped objective (default 1).")
 flags.DEFINE_boolean(
     "fitvid_augment", False, "Use fitvid-style data augmentation."
 )  # changed
 
 # Model architecture
+flags.DEFINE_integer("grasped_dim", 1, "Grasped size.")  #
 flags.DEFINE_integer("z_dim", 10, "LSTM output size.")  #
 flags.DEFINE_integer("rnn_size", 256, "LSTM hidden size.")  #
 flags.DEFINE_integer("g_dim", 128, "CNN feature size / LSTM input size.")  #
@@ -172,7 +174,7 @@ def load_data(
     # dataset_path = "/home/arpit/test_projects/OmniGibson/dynamics_model_data/succ.hdf5"
     # print("video_len: ", video_len)
     return load_dataset_robomimic_torch(
-        dataset_files, FLAGS.batch_size, video_len, image_size, phase=None, depth=False, normal=False, view="rgb", seg=False, cache_mode=None)
+        dataset_files, FLAGS.batch_size, video_len, image_size, phase=data_type, depth=False, normal=False, view="rgb", seg=False, cache_mode=None)
 
 
 
@@ -254,6 +256,7 @@ def main(argv):
     rgb_weight = FLAGS.rgb_weight
     depth_weight = FLAGS.depth_weight
     normal_weight = FLAGS.normal_weight
+    grasped_weight = FLAGS.grasped_weight
 
     loss_weights = {
         "kld": FLAGS.beta,
@@ -264,12 +267,14 @@ def main(argv):
         "lpips": FLAGS.lpips_weight,
         "tv": FLAGS.tv_weight,
         "segmented_object": FLAGS.segmented_object_weight,
+        "grasped": grasped_weight
     }
 
     model_kwargs = dict(
         stage_sizes=[int(i) for i in FLAGS.stage_sizes],
         z_dim=FLAGS.z_dim,
         g_dim=FLAGS.g_dim,
+        grasped_dim=FLAGS.grasped_dim,
         rnn_size=FLAGS.rnn_size,
         num_base_filters=FLAGS.num_base_filters,
         first_block_shape=[int(i) for i in FLAGS.first_block_shape],
@@ -448,8 +453,8 @@ def main(argv):
             print(f"Total train batches: {total_train_batches}")
             for iter_item in enumerate(tqdm(test_data_loader)):
                 test_batch_idx, batch = iter_item
-                # print("batch: ", batch.keys())
-                # print("batch[video]: ", batch['video'].shape)
+                # print("batchhhhhhhh: ", batch.keys())
+                # print("batch[video]: ", batch['video'].shape, batch['grasped'].shape, batch['actions'].shape)
                 batch = dict_to_cuda(batch)
                 with autocast() if FLAGS.fp16 else ExitStack() as ac:
                     metrics, eval_preds = model.module.evaluate(
@@ -591,8 +596,8 @@ def main(argv):
 
             # get segmentations from data if they exist
             batch_segmentations = batch.get("segmentation", None)
-            print("batch[video]: ", batch["video"].shape, batch["actions"].shape, batch_segmentations)
-            inputs = batch["video"], batch["actions"], batch_segmentations
+            # print("batch[video]: ", batch["video"].shape, batch["actions"].shape, batch_segmentations)
+            inputs = batch["video"], batch["actions"], batch['grasped'], batch_segmentations
 
             if depth_predictor_kwargs:
                 inputs = inputs + (batch["depth_video"],)
@@ -609,7 +614,7 @@ def main(argv):
                 loss, preds, metrics = model(
                     *inputs, compute_metrics=(batch_idx % 200 == 0)
                 )
-                print("predsss[rgb]: ", preds['rgb'].shape)
+                # print("predsss[rgb]: ", preds['rgb'].shape)
 
             if NGPU > 1:
                 loss = loss.mean()

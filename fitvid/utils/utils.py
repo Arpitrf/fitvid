@@ -168,7 +168,7 @@ def copy_attrs(src, dst):
 def copy_group(source_group, dest_group):
     for key in source_group:
         item = source_group[key]
-        print("key, type(item): ", key, type(item))
+        # print("key, type(item): ", key, type(item))
         if isinstance(item, h5py.Group):
             new_group = dest_group.create_group(key)
             copy_attrs(item, new_group)

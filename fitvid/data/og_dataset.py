@@ -118,7 +118,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         elif filter_by_attribute is not None:
             self.demos = [elem.decode("utf-8") for elem in np.array(self.hdf5_file["mask/{}".format(filter_by_attribute)][:])]
         else:
-            self.demos = list(self.hdf5_file.keys())
+            self.demos = list(self.hdf5_file['data'].keys())
 
         # sort demo keys
         inds = np.argsort([int(elem[8:]) for elem in self.demos])
@@ -135,7 +135,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         self.total_num_sequences = 0
         for ep in self.demos:
             # demo_length = self.hdf5_file["data/{}".format(ep)].attrs["num_samples"]
-            demo_length = len(self.hdf5_file["{}".format(ep)]['actions']['actions'])
+            demo_length = len(self.hdf5_file["data/{}".format(ep)]['actions']['actions'])
             self._demo_id_to_start_indices[ep] = self.total_num_sequences
             self._demo_id_to_demo_length[ep] = demo_length
 
@@ -147,7 +147,7 @@ class SequenceDataset(torch.utils.data.Dataset):
                 num_sequences -= (self.seq_length - 1)
 
             # Added by arpit
-            num_sequences = 1
+            num_sequences = 8
 
             if self.pad_seq_length:
                 assert demo_length >= 1  # sequence needs to have at least one sample
@@ -213,10 +213,12 @@ class SequenceDataset(torch.utils.data.Dataset):
             # read from file
             # print("keyyyy: ", key)
             if key == 'actions':
-                hd5key = "{}/{}/{}".format(ep, key, key)
+                hd5key = "data/{}/{}/{}".format(ep, key, key)
             elif key == 'obs/rgb':
                 # print("in obs/rgbbbbbb")
-                hd5key = "{}/observations/rgb".format(ep)
+                hd5key = "data/{}/observations/rgb".format(ep)
+            elif key == 'grasped':
+                hd5key = "data/{}/extras/grasps".format(ep)
             ret = self.hdf5_file[hd5key]
         return ret
     
@@ -262,6 +264,10 @@ class SequenceDataset(torch.utils.data.Dataset):
             # seq[k] = data[seq_begin_index: seq_end_index].astype("float32")
             # Retain existing datatype
             seq[k] = data[seq_begin_index: seq_end_index]
+            # change grasped from bool to float
+            if k == 'grasped':
+                seq[k] = seq[k].astype(float)
+
             # print("seq[k]: ", seq[k].shape)
 
         seq = pad_sequence(seq, padding=(seq_begin_pad, seq_end_pad), pad_same=True)
@@ -352,8 +358,8 @@ class SequenceDataset(torch.utils.data.Dataset):
         # start at offset index if not padding for frame stacking
         demo_index_offset = 0 if self.pad_frame_stack else (self.n_frame_stack - 1)
         
-        # remove later
-        demo_index_offset = 8
+        # # remove later
+        # demo_index_offset = 8
 
         index_in_demo = index - demo_start_index + demo_index_offset
         # print("index, index_in_demo: ", index, index_in_demo)

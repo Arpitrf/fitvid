@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import lpips as lpips_module
 
-from fitvid.model.nvae import ModularEncoder, ModularDecoder
+from fitvid.model.nvae import ModularEncoder, ModularDecoder, GraspedFCN
 from fitvid.model.depth_predictor import DepthPredictor
 from fitvid.utils.depth_utils import pixel_wise_loss, pixel_wise_loss_segmented
 from fitvid.utils.pytorch_metrics import (
@@ -140,8 +140,11 @@ class FitVid(nn.Module):
             num_output_channels=self.num_video_channels,
         )
 
+        # added by Arpit
+        self.grasped_fcn = GraspedFCN()
+
         input_size = self.get_input_size(
-            model_kwargs["g_dim"], model_kwargs["action_size"], model_kwargs["z_dim"]
+            model_kwargs["g_dim"], model_kwargs["action_size"], model_kwargs["z_dim"], model_kwargs["grasped_dim"]
         )
         self.frame_predictor = MultiGaussianLSTM(
             input_size=input_size,
@@ -216,20 +219,27 @@ class FitVid(nn.Module):
                 scale_clip=0.1,
             )
 
-    def get_input(self, hidden, action, z):
+    def get_input(self, hidden, action, z, grasped):
+        # print("hidden, action, z, grasped:", hidden.shape, action.shape, z.shape, grasped.shape)
         inp = [hidden]
         if self.action_conditioned:
             inp += [action]
         if self.stochastic:
             inp += [z]
+        inp += [grasped]
+        # for j in range(len(inp)):
+        #     print("---type", type(inp[j]))
+        #     print("---", inp[j].shape)
+        # input()
         return torch.cat(inp, dim=1)
 
-    def get_input_size(self, hidden_size, action_size, z_size):
+    def get_input_size(self, hidden_size, action_size, z_size, grasped_size):
         inp = hidden_size
         if self.action_conditioned:
             inp += action_size
         if self.stochastic:
             inp += z_size
+        inp += grasped_size
         return inp
 
     def kl_divergence(self, mean1, logvar1, mean2, logvar2, batch_size):
@@ -283,6 +293,7 @@ class FitVid(nn.Module):
         self,
         video,
         actions,
+        grasped,
         segmentation=None,
         depth=None,
         normal=None,
@@ -306,6 +317,9 @@ class FitVid(nn.Module):
             + video.shape[1:]
         )  # reconstruct first two dims
         # print("33video.shape: ", video.shape)
+
+        grasped_gt = grasped
+
         skips = {
             k: skips[k].view(
                 (
@@ -316,11 +330,14 @@ class FitVid(nn.Module):
             )[:, self.n_past - 1]
             for k in skips.keys()
         }
-        preds, kld, means, logvars = self.predict_rgb(video, actions, hidden, skips)
+        preds, kld, means, logvars, grasped_preds = self.predict_rgb(video, actions, grasped, hidden, skips)
+        # print("grasped_preds, grasped_gt: ", grasped_preds.shape, grasped_gt.shape)
         loss, preds, metrics = self.compute_loss(
             preds,
             video,
             kld,
+            grasped_preds,
+            grasped_gt,
             segmentation=segmentation,
             depth=depth,
             normal=normal,
@@ -339,6 +356,8 @@ class FitVid(nn.Module):
         preds,
         video,
         kld,
+        grasped_preds,
+        grasped_gt,
         segmentation=None,
         depth=None,
         normal=None,
@@ -348,8 +367,13 @@ class FitVid(nn.Module):
         metrics = dict()
         preds = dict(rgb=preds)
         for loss, weight in self.loss_weights.items():
-            print("loss, weight: ", loss, weight)
-            if loss == "kld":
+            # print("loss, weight: ", loss, weight)
+            # added by Arpit
+            if loss == 'grasped':
+                grasped_loss = nn.BCEWithLogitsLoss()(grasped_preds, grasped_gt[:, 1:])
+                total_loss += weight * grasped_loss
+                metrics["loss/grasped"] = grasped_loss
+            elif loss == "kld":
                 total_loss += weight * kld
                 metrics["loss/kld"] = kld
             elif loss == "rgb":
@@ -476,7 +500,7 @@ class FitVid(nn.Module):
 
         return total_loss, preds, metrics
 
-    def predict_rgb(self, video, actions, hidden, skips):
+    def predict_rgb(self, video, actions, grasped, hidden, skips):
         batch_size, video_len = video.shape[0], video.shape[1]
         pred_state = post_state = prior_state = None
 
@@ -485,14 +509,17 @@ class FitVid(nn.Module):
         h_preds = []
         if self.training and self.multistep:
             preds = []
+            grasped_preds = []
             for i in range(1, video_len):
                 h, h_target = hidden[:, i - 1], hidden[:, i]
                 if i > self.n_past:
                     h, _ = self.encoder(pred)
                 (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
                 (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
-                inp = self.get_input(h, actions[:, i - 1], z_t)
+                # print("shapes, h, actions, z_t: ", h.shape, actions.shape, z_t.shape)
+                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
+                # print("h_pred: ", h_pred.shape)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 h_preds.append(h_pred)
                 means.append(mu)
@@ -501,14 +528,19 @@ class FitVid(nn.Module):
                     mu, logvar, prior_mu, prior_logvar, batch_size
                 )
                 pred = self.decoder(h_pred, skips, has_time_dim=False)
+                grasped_pred = self.grasped_fcn(h_pred)
+                # print("pred: ", pred.shape)
                 preds.append(pred)
+                grasped_preds.append(grasped_pred)
             preds = torch.stack(preds, axis=1)
+            grasped_preds = torch.stack(grasped_preds, axis=1)
+            # print("preds, grasped_preds: ", preds.shape, grasped_preds.shape)
         else:
             for i in range(1, video_len):
                 h, h_target = hidden[:, i - 1], hidden[:, i]
                 (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
                 (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
-                inp = self.get_input(h, actions[:, i - 1], z_t)
+                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 h_preds.append(h_pred)
@@ -527,7 +559,7 @@ class FitVid(nn.Module):
             means, logvars = torch.zeros(h.shape[0], video_len - 1, 1).to(
                 h
             ), torch.zeros(h.shape[0], video_len - 1, 1).to(h)
-        return preds, kld, means, logvars
+        return preds, kld, means, logvars, grasped_preds
 
     def evaluate(self, batch, compute_metrics=False):
         ag_metrics, ag_preds = self._evaluate(
@@ -543,11 +575,13 @@ class FitVid(nn.Module):
 
     def _evaluate(self, batch, compute_metrics=False, autoregressive=True):
         """Predict the full video conditioned on the first self.n_past frames."""
-        video, actions, segmentation = (
+        video, actions, segmentation, grasped = (
             batch["video"],
             batch["actions"],
             batch.get("segmentation", None),
+            batch["grasped"]
         )
+        # print("in evaluate: video, grasped, actions", video.shape, grasped.shape, actions.shape)
         batch_size, video_len = video.shape[0], video.shape[1]
         pred_state = prior_state = post_state = None
         video = video.view(
@@ -585,7 +619,8 @@ class FitVid(nn.Module):
                     z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)
                 # print("actions shapeee: ", actions.shape)
                 # print("to make inp: ", h.shape, actions[:, i - 1].shape, z_t.shape)
-                inp = self.get_input(h, actions[:, i - 1], z_t)
+                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                # print("inp.shapeeeeee: ", inp.shape)
                 # print("input to the frame predictor: ", inp.shape, pred_state)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 # print("h_pred shape: ", h_pred.shape)
@@ -602,7 +637,8 @@ class FitVid(nn.Module):
                 h, h_target = hidden[:, i - 1], hidden[:, i]
                 (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
                 (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
-                inp = self.get_input(h, actions[:, i - 1], z_t)
+                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                # print("2inp.shapeeeeee: ", inp.shape)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 h_preds.append(h_pred)
