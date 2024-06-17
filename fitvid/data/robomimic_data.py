@@ -166,6 +166,7 @@ def load_dataset_robomimic_torch(
     assert phase in [
         "train",
         "valid",
+        None,
     ], f"Phase is not one of the acceptable values! Got {phase}"
 
     def prepare_data(input_batch):
