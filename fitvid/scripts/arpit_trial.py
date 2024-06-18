@@ -7,9 +7,9 @@ import numpy as np
 
 # partition_dataset_train_valid('/home/arpit/test_projects/OmniGibson/backup/dataset_new.hdf5')
 
-f = h5py.File('/home/arpit/test_projects/OmniGibson/backup/dataset_new.hdf5', "r") 
-# f = h5py.File('/home/arpit/test_projects/OmniGibson/dynamics_model_dataset/dataset.hdf5', "r") 
-print(f.keys())
+# f = h5py.File('/home/arpit/test_projects/OmniGibson/backup/dataset_new.hdf5', "r") 
+# # f = h5py.File('/home/arpit/test_projects/OmniGibson/dynamics_model_dataset/dataset.hdf5', "r") 
+# print(f.keys())
 # print(f['episode_00001']['extras'].keys())
 # demos = f["data"].keys()
 # print("demos: ", len(demos))
