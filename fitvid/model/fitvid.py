@@ -528,7 +528,10 @@ class FitVid(nn.Module):
                     mu, logvar, prior_mu, prior_logvar, batch_size
                 )
                 pred = self.decoder(h_pred, skips, has_time_dim=False)
-                print("h_pred: ", h_pred[:5, :5])
+                print("-------- Start ----------")
+                for b in range(5):
+                    print(f"{b} element in batch 1. h_pred: ", h_pred[b, :5])
+                print("------- End ------")
                 grasped_pred = self.grasped_fcn(h_pred)
                 # print("pred: ", pred.shape)
                 preds.append(pred)
