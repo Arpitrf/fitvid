@@ -457,7 +457,7 @@ def main(argv):
                 # print("batch[video]: ", batch['video'].shape, batch['grasped'].shape, batch['actions'].shape)
                 batch = dict_to_cuda(batch)
                 with autocast() if FLAGS.fp16 else ExitStack() as ac:
-                    metrics, eval_preds = model.module.evaluate(
+                    metrics, eval_preds, eval_grasped_preds = model.module.evaluate(
                         batch, compute_metrics=test_batch_idx % 1 == 0
                     )
                     if test_batch_idx < num_batch_to_save:

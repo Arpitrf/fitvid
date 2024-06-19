@@ -528,12 +528,34 @@ class FitVid(nn.Module):
                     mu, logvar, prior_mu, prior_logvar, batch_size
                 )
                 pred = self.decoder(h_pred, skips, has_time_dim=False)
+                print("h_pred: ", h_pred[:5, :5])
                 grasped_pred = self.grasped_fcn(h_pred)
                 # print("pred: ", pred.shape)
                 preds.append(pred)
                 grasped_preds.append(grasped_pred)
             preds = torch.stack(preds, axis=1)
             grasped_preds = torch.stack(grasped_preds, axis=1)
+            # remove later
+            # print("-----------Start----------")
+            # print('grasped_preds: ', grasped_preds)
+            # print("-----------End----------")
+            # import matplotlib.pyplot as plt
+            # fig, ax = plt.subplots(3,3)
+            # temp1 = (preds[0] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
+            # temp2 = (preds[1] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
+            # temp3 = (preds[2] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
+            # temp4 = (preds[3] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
+            # temp5 = (preds[4] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
+            # ax[0][0].imshow(temp1[1])
+            # ax[0][1].imshow(temp1[3])
+            # ax[0][2].imshow(temp1[5])
+            # ax[1][0].imshow(temp2[1])
+            # ax[1][1].imshow(temp2[3])
+            # ax[1][2].imshow(temp2[5])
+            # ax[2][0].imshow(temp3[1])
+            # ax[2][1].imshow(temp3[3])
+            # ax[2][2].imshow(temp3[5])
+            # plt.show()
             # print("preds, grasped_preds: ", preds.shape, grasped_preds.shape)
         else:
             for i in range(1, video_len):
@@ -562,16 +584,16 @@ class FitVid(nn.Module):
         return preds, kld, means, logvars, grasped_preds
 
     def evaluate(self, batch, compute_metrics=False):
-        ag_metrics, ag_preds = self._evaluate(
+        ag_metrics, ag_preds, ag_grasped_preds = self._evaluate(
             batch, compute_metrics, autoregressive=True
         )
-        non_ag_metrics, non_ag_preds = self._evaluate(
+        non_ag_metrics, non_ag_preds, non_ag_grasped_preds = self._evaluate(
             batch, compute_metrics, autoregressive=False
         )
         ag_metrics = {f"ag/{k}": v for k, v in ag_metrics.items()}
         non_ag_metrics = {f"non_ag/{k}": v for k, v in non_ag_metrics.items()}
         metrics = {**ag_metrics, **non_ag_metrics}
-        return metrics, dict(ag=ag_preds, non_ag=non_ag_preds)
+        return metrics, dict(ag=ag_preds, non_ag=non_ag_preds), dict(ag=ag_grasped_preds, non_ag=non_ag_grasped_preds)
 
     def _evaluate(self, batch, compute_metrics=False, autoregressive=True):
         """Predict the full video conditioned on the first self.n_past frames."""
@@ -581,6 +603,7 @@ class FitVid(nn.Module):
             batch.get("segmentation", None),
             batch["grasped"]
         )
+        # print("GT grasped: ", grasped)
         # print("in evaluate: video, grasped, actions", video.shape, grasped.shape, actions.shape)
         batch_size, video_len = video.shape[0], video.shape[1]
         pred_state = prior_state = post_state = None
@@ -604,6 +627,7 @@ class FitVid(nn.Module):
         # print("skpis: ", skips.keys())
         # evaluating
         preds = []
+        grasped_preds = []
         hidden = hidden.view((batch_size, video_len) + hidden.shape[1:])
         # print("self.n_past:", self.n_past)
         if autoregressive:
@@ -627,9 +651,13 @@ class FitVid(nn.Module):
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 # print("h_pred shape: ", h_pred.shape)
                 pred = self.decoder(h_pred[None, :], skips)[0]
+                grasped_pred = self.grasped_fcn(h_pred)
+                grasped_pred = torch.sigmoid(grasped_pred) 
                 # print("pred shape: ", pred.shape)
                 preds.append(pred)
+                grasped_preds.append(grasped_pred)
             preds = torch.stack(preds, axis=1)
+            grasped_preds = torch.stack(grasped_preds, axis=1)
         else:
             h_preds = []
             kld = torch.tensor(0).to(video)
@@ -712,7 +740,7 @@ class FitVid(nn.Module):
                     }
                 )
             preds["normal"] = normal_preds
-        return metrics, preds
+        return metrics, preds, grasped_preds
 
     def test(self, batch):
         """Predict the full video conditioned on the first self.n_past frames."""
