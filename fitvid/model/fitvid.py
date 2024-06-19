@@ -495,6 +495,7 @@ class FitVid(nn.Module):
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 h_preds.append(h_pred)
+                print("h_pred: ", h_pred[:5, :5])
                 means.append(mu)
                 logvars.append(logvar)
                 kld += self.kl_divergence(
@@ -503,6 +504,7 @@ class FitVid(nn.Module):
                 pred = self.decoder(h_pred, skips, has_time_dim=False)
                 preds.append(pred)
             preds = torch.stack(preds, axis=1)
+            print("--------------------------")
         else:
             for i in range(1, video_len):
                 h, h_target = hidden[:, i - 1], hidden[:, i]
@@ -511,6 +513,7 @@ class FitVid(nn.Module):
                 inp = self.get_input(h, actions[:, i - 1], z_t)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
+                # print("h_pred: ", h_pred[:5, :5])
                 h_preds.append(h_pred)
                 means.append(mu)
                 logvars.append(logvar)
@@ -519,6 +522,7 @@ class FitVid(nn.Module):
                 )
             h_preds = torch.stack(h_preds, axis=1)
             preds = self.decoder(h_preds, skips)
+            # print("--------------------------")
 
         if self.stochastic:
             means = torch.stack(means, axis=1)
