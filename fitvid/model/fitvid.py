@@ -495,7 +495,10 @@ class FitVid(nn.Module):
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 h_preds.append(h_pred)
-                print("h_pred: ", h_pred[:5, :5])
+                print("-------- Start ----------")
+                for b in range(5):
+                    print(f"{b} element in batch 1. h_pred: ", h_pred[b, :5])
+                print("------- End ------")
                 means.append(mu)
                 logvars.append(logvar)
                 kld += self.kl_divergence(
