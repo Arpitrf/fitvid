@@ -1,3 +1,7 @@
+# Commands 
+
+1. python fitvid/scripts/train_fitvid.py --output_dir /home/arpit/test_projects/fitvid/run_temp --dataset_file /home/arpit/test_projects/OmniGibson/dynamics_model_dataset/dataset.hdf5 --wandb_online
+
 # FitVid Video Prediction Model
 
 Implementation of [FitVid][website] video prediction model in JAX/Flax.

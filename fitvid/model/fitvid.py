@@ -489,21 +489,25 @@ class FitVid(nn.Module):
                 h, h_target = hidden[:, i - 1], hidden[:, i]
                 if i > self.n_past:
                     h, _ = self.encoder(pred)
-                (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
-                (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
+                if self.stochastic:
+                    (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
+                    (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
+                else:
+                    z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)
                 inp = self.get_input(h, actions[:, i - 1], z_t)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 h_preds.append(h_pred)
-                print("-------- Start ----------")
-                for b in range(5):
-                    print(f"{b} element in batch 1. h_pred: ", h_pred[b, :5])
-                print("------- End ------")
-                means.append(mu)
-                logvars.append(logvar)
-                kld += self.kl_divergence(
-                    mu, logvar, prior_mu, prior_logvar, batch_size
-                )
+                # print("-------- Start ----------")
+                # for b in range(5):
+                #     print(f"{b} element in batch 1. h_pred: ", h_pred[b, :5])
+                # print("------- End ------")
+                if self.stochastic:
+                    means.append(mu)
+                    logvars.append(logvar)
+                    kld += self.kl_divergence(
+                        mu, logvar, prior_mu, prior_logvar, batch_size
+                    )
                 pred = self.decoder(h_pred, skips, has_time_dim=False)
                 preds.append(pred)
             preds = torch.stack(preds, axis=1)
@@ -511,18 +515,22 @@ class FitVid(nn.Module):
         else:
             for i in range(1, video_len):
                 h, h_target = hidden[:, i - 1], hidden[:, i]
-                (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
-                (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
+                if self.stochastic:
+                    (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
+                    (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
+                else:
+                    z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)
                 inp = self.get_input(h, actions[:, i - 1], z_t)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 # print("h_pred: ", h_pred[:5, :5])
                 h_preds.append(h_pred)
-                means.append(mu)
-                logvars.append(logvar)
-                kld += self.kl_divergence(
-                    mu, logvar, prior_mu, prior_logvar, batch_size
-                )
+                if self.stochastic:
+                    means.append(mu)
+                    logvars.append(logvar)
+                    kld += self.kl_divergence(
+                        mu, logvar, prior_mu, prior_logvar, batch_size
+                    )
             h_preds = torch.stack(h_preds, axis=1)
             preds = self.decoder(h_preds, skips)
             # print("--------------------------")
@@ -607,15 +615,19 @@ class FitVid(nn.Module):
             kld = torch.tensor(0).to(video)
             for i in range(1, video_len):
                 h, h_target = hidden[:, i - 1], hidden[:, i]
-                (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
-                (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
+                if self.stochastic:
+                    (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
+                    (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
+                else:
+                    z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)
                 inp = self.get_input(h, actions[:, i - 1], z_t)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 h_preds.append(h_pred)
-                kld += self.kl_divergence(
-                    mu, logvar, prior_mu, prior_logvar, batch_size
-                )
+                if self.stochastic:
+                    kld += self.kl_divergence(
+                        mu, logvar, prior_mu, prior_logvar, batch_size
+                    )
             h_preds = torch.stack(h_preds, axis=1)
             preds = self.decoder(h_preds, skips)
 

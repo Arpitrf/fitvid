@@ -50,7 +50,7 @@ flags.DEFINE_boolean(
 )
 flags.DEFINE_float("weight_decay", 0.0, "weight decay value")
 flags.DEFINE_float("adam_eps", 1e-8, "epsilon parameter for Adam optimizer")
-flags.DEFINE_boolean("stochastic", True, "Use a stochastic model.")
+flags.DEFINE_boolean("stochastic", False, "Use a stochastic model.")
 flags.DEFINE_boolean("multistep", False, "Multi-step training.")  # changed
 flags.DEFINE_boolean(
     "fp16", False, "Use lower precision training for perf improvement."
