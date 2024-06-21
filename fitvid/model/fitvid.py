@@ -107,12 +107,12 @@ class FitVid(nn.Module):
         first_block_shape = [model_kwargs["first_block_shape"][-1]] + model_kwargs[
             "first_block_shape"
         ][:2]
-        self.encoder = ModularEncoder(
-            stage_sizes=model_kwargs["stage_sizes"],
-            output_size=model_kwargs["g_dim"],
-            num_base_filters=model_kwargs["num_base_filters"],
-            num_input_channels=self.num_video_channels,
-        )
+        # self.encoder = ModularEncoder(
+        #     stage_sizes=model_kwargs["stage_sizes"],
+        #     output_size=model_kwargs["g_dim"],
+        #     num_base_filters=model_kwargs["num_base_filters"],
+        #     num_input_channels=self.num_video_channels,
+        # )
 
         if self.stochastic:
             self.prior = MultiGaussianLSTM(
@@ -130,21 +130,21 @@ class FitVid(nn.Module):
         else:
             self.prior, self.posterior = None, None
 
-        self.decoder = ModularDecoder(
-            first_block_shape=first_block_shape,
-            input_size=model_kwargs["g_dim"],
-            stage_sizes=model_kwargs["stage_sizes"],
-            num_base_filters=model_kwargs["num_base_filters"],
-            skip_type=model_kwargs["skip_type"],
-            expand=model_kwargs["expand_decoder"],
-            num_output_channels=self.num_video_channels,
-        )
+        # self.decoder = ModularDecoder(
+        #     first_block_shape=first_block_shape,
+        #     input_size=model_kwargs["g_dim"],
+        #     stage_sizes=model_kwargs["stage_sizes"],
+        #     num_base_filters=model_kwargs["num_base_filters"],
+        #     skip_type=model_kwargs["skip_type"],
+        #     expand=model_kwargs["expand_decoder"],
+        #     num_output_channels=self.num_video_channels,
+        # )
 
         # added by Arpit
         self.grasped_fcn = GraspedFCN()
 
         input_size = self.get_input_size(
-            model_kwargs["g_dim"], model_kwargs["action_size"], model_kwargs["z_dim"], model_kwargs["grasped_dim"]
+            0, model_kwargs["action_size"], model_kwargs["z_dim"], model_kwargs["grasped_dim"]
         )
         self.frame_predictor = MultiGaussianLSTM(
             input_size=input_size,
@@ -221,7 +221,10 @@ class FitVid(nn.Module):
 
     def get_input(self, hidden, action, z, grasped):
         # print("hidden, action, z, grasped:", hidden.shape, action.shape, z.shape, grasped.shape)
-        inp = [hidden]
+        if hidden is None:
+            inp = []
+        else:
+            inp = [hidden]
         if self.action_conditioned:
             inp += [action]
         if self.stochastic:
@@ -299,37 +302,38 @@ class FitVid(nn.Module):
         normal=None,
         compute_metrics=False,
     ):
-        batch_size, video_len = video.shape[0], video.shape[1]
+        # batch_size, video_len = video.shape[0], video.shape[1]
         # print("11video.shape: ", video.shape)
-        video = video.view(
-            (batch_size * video_len,) + video.shape[2:]
-        )  # collapse first two dims
+        # video = video.view(
+        #     (batch_size * video_len,) + video.shape[2:]
+        # )  # collapse first two dims
         # print("22video.shape: ", video.shape)
-        hidden, skips = self.encoder(video)
+        # hidden, skips = self.encoder(video)
         # print("11hidden, skips: ", hidden.shape)
-        hidden = hidden.view((batch_size, video_len) + hidden.shape[1:])
+        # hidden = hidden.view((batch_size, video_len) + hidden.shape[1:])
         # print("22hidden, skips: ", hidden.shape)
-        video = video.view(
-            (
-                batch_size,
-                video_len,
-            )
-            + video.shape[1:]
-        )  # reconstruct first two dims
+        # video = video.view(
+        #     (
+        #         batch_size,
+        #         video_len,
+        #     )
+        #     + video.shape[1:]
+        # )  # reconstruct first two dims
         # print("33video.shape: ", video.shape)
 
         grasped_gt = grasped
 
-        skips = {
-            k: skips[k].view(
-                (
-                    batch_size,
-                    video_len,
-                )
-                + tuple(skips[k].shape[1:])
-            )[:, self.n_past - 1]
-            for k in skips.keys()
-        }
+        # skips = {
+        #     k: skips[k].view(
+        #         (
+        #             batch_size,
+        #             video_len,
+        #         )
+        #         + tuple(skips[k].shape[1:])
+        #     )[:, self.n_past - 1]
+        #     for k in skips.keys()
+        # }
+        hidden, skips = None, None
         preds, kld, means, logvars, grasped_preds = self.predict_rgb(video, actions, grasped, hidden, skips)
         # print("grasped_preds, grasped_gt: ", grasped_preds.shape, grasped_gt.shape)
         loss, preds, metrics = self.compute_loss(
@@ -373,114 +377,114 @@ class FitVid(nn.Module):
                 grasped_loss = nn.BCEWithLogitsLoss()(grasped_preds, grasped_gt[:, 1:])
                 total_loss += weight * grasped_loss
                 metrics["loss/grasped"] = grasped_loss
-            elif loss == "kld":
-                total_loss += weight * kld
-                metrics["loss/kld"] = kld
-            elif loss == "rgb":
-                # initialize mask to be a torch tensor of all ones with same shape as video
-                with torch.no_grad():
-                    mse_per_sample = pixel_wise_loss(
-                        preds["rgb"],
-                        video[:, 1:],
-                        loss="l2",
-                        reduce_batch=False,
-                        mask=None,
-                    )
-                    l1_per_sample = pixel_wise_loss(
-                        preds["rgb"],
-                        video[:, 1:],
-                        loss="l1",
-                        reduce_batch=False,
-                        mask=None,
-                    )
-                total_loss += self.rgb_loss(preds["rgb"], video[:, 1:]) * weight
-                metrics["loss/mse"] = mse_per_sample.mean().detach()
-                metrics["loss/mse_per_sample"] = mse_per_sample.detach()
-                metrics["loss/l1_loss"] = l1_per_sample.mean().detach()
-                metrics["loss/l1_loss_per_sample"] = l1_per_sample.detach()
-            elif loss == "segmented_object":
-                if weight > 0:
-                    segmented_mse_per_sample = pixel_wise_loss_segmented(
-                        preds["rgb"],
-                        video[:, 1:],
-                        segmentation[:, 1:],
-                        loss=self.rgb_loss_type,
-                        reduce_batch=False,
-                    )
-                    total_loss += segmented_mse_per_sample.mean() * weight
-                    metrics["loss/segmented_mse"] = segmented_mse_per_sample.mean()
-                    metrics[
-                        "loss/segmented_mse_per_sample"
-                    ] = segmented_mse_per_sample.detach()
-            elif loss == "tv":
-                if weight != 0:
-                    tv_loss = tv(preds)
-                    total_loss += weight * tv_loss
-                    metrics["loss/tv"] = tv_loss
-            elif loss == "lpips":
-                if weight != 0:
-                    lpips_loss = lpips(self.lpips, preds["rgb"], video[:, 1:])
-                    total_loss += weight * lpips_loss
-                    metrics["loss/lpips"] = lpips_loss
-            elif loss == "policy":
-                if weight != 0 and self.policy_feature_metric:
-                    feature_losses = []
-                    for policy_feature_metric in self.policy_network_losses:
-                        action_mse, feature_mse = policy_feature_metric(
-                            preds["rgb"], video[:, 1:]
-                        )
-                        feature_losses.append(feature_mse)
-                    feature_mse = torch.stack(feature_losses).mean()
-                    metrics["loss/policy_feature_loss"] = feature_mse
-                    total_loss = total_loss + weight * feature_mse
-            elif loss == "depth":
-                if self.has_depth_predictor:
-                    if weight != 0:
-                        depth_preds = self.depth_predictor(preds["rgb"])
-                        depth_loss_per_sample = self.depth_predictor.depth_loss(
-                            depth_preds, depth[:, 1:], reduce_batch=False
-                        )
-                        depth_loss = depth_loss_per_sample.mean()
-                        total_loss = total_loss + weight * depth_loss
-                    else:
-                        with torch.no_grad():
-                            depth_preds = self.depth_predictor(preds["rgb"])
-                            depth_loss_per_sample = self.depth_predictor.depth_loss(
-                                depth_preds, depth[:, 1:], reduce_batch=False
-                            )
-                            depth_loss = depth_loss_per_sample.mean()
-                    preds["depth"] = depth_preds
-                    metrics["loss/depth_loss"] = depth_loss
-                    metrics[
-                        "loss/depth_loss_per_sample"
-                    ] = depth_loss_per_sample.detach()
-                elif weight != 0:
-                    raise ValueError(
-                        "Trying to use positive depth weight but no depth predictor!"
-                    )
-            elif loss == "normal":
-                if self.has_normal_predictor:
-                    if weight != 0:
-                        normal_preds = self.normal_predictor(preds["rgb"])
-                        normal_loss_per_sample = mse_loss(
-                            normal_preds, normal[:, 1:], reduce_batch=False
-                        )
-                        normal_loss = normal_loss_per_sample.mean()
-                        total_loss = total_loss + weight * normal_loss
-                    else:
-                        with torch.no_grad():
-                            normal_preds = self.normal_predictor(preds["rgb"])
-                            normal_loss_per_sample = mse_loss(
-                                normal_preds, normal[:, 1:], reduce_batch=False
-                            )
-                            normal_loss = normal_loss_per_sample.mean()
-                    preds["normal"] = normal_preds
-                    metrics["loss/normal_loss"] = normal_loss
-                    metrics[
-                        "loss/normal_loss_per_sample"
-                    ] = normal_loss_per_sample.detach()
-            else:
-                raise NotImplementedError(f"Loss {loss} not implemented!")
+            # elif loss == "kld":
+            #     total_loss += weight * kld
+            #     metrics["loss/kld"] = kld
+            # elif loss == "rgb":
+            #     # initialize mask to be a torch tensor of all ones with same shape as video
+            #     with torch.no_grad():
+            #         mse_per_sample = pixel_wise_loss(
+            #             preds["rgb"],
+            #             video[:, 1:],
+            #             loss="l2",
+            #             reduce_batch=False,
+            #             mask=None,
+            #         )
+            #         l1_per_sample = pixel_wise_loss(
+            #             preds["rgb"],
+            #             video[:, 1:],
+            #             loss="l1",
+            #             reduce_batch=False,
+            #             mask=None,
+            #         )
+            #     total_loss += self.rgb_loss(preds["rgb"], video[:, 1:]) * weight
+            #     metrics["loss/mse"] = mse_per_sample.mean().detach()
+            #     metrics["loss/mse_per_sample"] = mse_per_sample.detach()
+            #     metrics["loss/l1_loss"] = l1_per_sample.mean().detach()
+            #     metrics["loss/l1_loss_per_sample"] = l1_per_sample.detach()
+            # elif loss == "segmented_object":
+            #     if weight > 0:
+            #         segmented_mse_per_sample = pixel_wise_loss_segmented(
+            #             preds["rgb"],
+            #             video[:, 1:],
+            #             segmentation[:, 1:],
+            #             loss=self.rgb_loss_type,
+            #             reduce_batch=False,
+            #         )
+            #         total_loss += segmented_mse_per_sample.mean() * weight
+            #         metrics["loss/segmented_mse"] = segmented_mse_per_sample.mean()
+            #         metrics[
+            #             "loss/segmented_mse_per_sample"
+            #         ] = segmented_mse_per_sample.detach()
+            # elif loss == "tv":
+            #     if weight != 0:
+            #         tv_loss = tv(preds)
+            #         total_loss += weight * tv_loss
+            #         metrics["loss/tv"] = tv_loss
+            # elif loss == "lpips":
+            #     if weight != 0:
+            #         lpips_loss = lpips(self.lpips, preds["rgb"], video[:, 1:])
+            #         total_loss += weight * lpips_loss
+            #         metrics["loss/lpips"] = lpips_loss
+            # elif loss == "policy":
+            #     if weight != 0 and self.policy_feature_metric:
+            #         feature_losses = []
+            #         for policy_feature_metric in self.policy_network_losses:
+            #             action_mse, feature_mse = policy_feature_metric(
+            #                 preds["rgb"], video[:, 1:]
+            #             )
+            #             feature_losses.append(feature_mse)
+            #         feature_mse = torch.stack(feature_losses).mean()
+            #         metrics["loss/policy_feature_loss"] = feature_mse
+            #         total_loss = total_loss + weight * feature_mse
+            # elif loss == "depth":
+            #     if self.has_depth_predictor:
+            #         if weight != 0:
+            #             depth_preds = self.depth_predictor(preds["rgb"])
+            #             depth_loss_per_sample = self.depth_predictor.depth_loss(
+            #                 depth_preds, depth[:, 1:], reduce_batch=False
+            #             )
+            #             depth_loss = depth_loss_per_sample.mean()
+            #             total_loss = total_loss + weight * depth_loss
+            #         else:
+            #             with torch.no_grad():
+            #                 depth_preds = self.depth_predictor(preds["rgb"])
+            #                 depth_loss_per_sample = self.depth_predictor.depth_loss(
+            #                     depth_preds, depth[:, 1:], reduce_batch=False
+            #                 )
+            #                 depth_loss = depth_loss_per_sample.mean()
+            #         preds["depth"] = depth_preds
+            #         metrics["loss/depth_loss"] = depth_loss
+            #         metrics[
+            #             "loss/depth_loss_per_sample"
+            #         ] = depth_loss_per_sample.detach()
+                # elif weight != 0:
+                #     raise ValueError(
+                #         "Trying to use positive depth weight but no depth predictor!"
+                #     )
+            # elif loss == "normal":
+            #     if self.has_normal_predictor:
+            #         if weight != 0:
+            #             normal_preds = self.normal_predictor(preds["rgb"])
+            #             normal_loss_per_sample = mse_loss(
+            #                 normal_preds, normal[:, 1:], reduce_batch=False
+            #             )
+            #             normal_loss = normal_loss_per_sample.mean()
+            #             total_loss = total_loss + weight * normal_loss
+            #         else:
+            #             with torch.no_grad():
+            #                 normal_preds = self.normal_predictor(preds["rgb"])
+            #                 normal_loss_per_sample = mse_loss(
+            #                     normal_preds, normal[:, 1:], reduce_batch=False
+            #                 )
+            #                 normal_loss = normal_loss_per_sample.mean()
+            #         preds["normal"] = normal_preds
+            #         metrics["loss/normal_loss"] = normal_loss
+            #         metrics[
+            #             "loss/normal_loss_per_sample"
+            #         ] = normal_loss_per_sample.detach()
+            # else:
+            #     raise NotImplementedError(f"Loss {loss} not implemented!")
 
         # Metrics
         metrics.update(
@@ -488,15 +492,15 @@ class FitVid(nn.Module):
                 "loss/all": total_loss,
             }
         )
-        if compute_metrics:
-            if segmentation is not None:
-                metrics.update(
-                    self.compute_metrics(
-                        preds["rgb"], video[:, 1:], segmentation[:, 1:]
-                    )
-                )
-            else:
-                metrics.update(self.compute_metrics(preds["rgb"], video[:, 1:]))
+        # if compute_metrics:
+        #     if segmentation is not None:
+        #         metrics.update(
+        #             self.compute_metrics(
+        #                 preds["rgb"], video[:, 1:], segmentation[:, 1:]
+        #             )
+        #         )
+        #     else:
+        #         metrics.update(self.compute_metrics(preds["rgb"], video[:, 1:]))
 
         return total_loss, preds, metrics
 
@@ -507,100 +511,112 @@ class FitVid(nn.Module):
         kld, means, logvars = torch.tensor(0).to(video), [], []
         # training
         h_preds = []
-        if self.training and self.multistep:
-            preds = []
-            grasped_preds = []
-            for i in range(1, video_len):
-                h, h_target = hidden[:, i - 1], hidden[:, i]
-                if i > self.n_past:
-                    h, _ = self.encoder(pred)
-                (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
-                (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
-                # print("shapes, h, actions, z_t: ", h.shape, actions.shape, z_t.shape)
-                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
-                (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
-                # print("h_pred: ", h_pred.shape)
-                h_pred = torch.sigmoid(h_pred)  # TODO notice
-                h_preds.append(h_pred)
-                means.append(mu)
-                logvars.append(logvar)
-                kld += self.kl_divergence(
-                    mu, logvar, prior_mu, prior_logvar, batch_size
-                )
-                pred = self.decoder(h_pred, skips, has_time_dim=False)
-                print("-------- Start ----------")
-                for b in range(5):
-                    print(f"{b} element in batch 1. h_pred: ", h_pred[b, :5])
-                print("------- End ------")
-                grasped_pred = self.grasped_fcn(h_pred)
-                # print("pred: ", pred.shape)
-                preds.append(pred)
-                grasped_preds.append(grasped_pred)
-            preds = torch.stack(preds, axis=1)
-            grasped_preds = torch.stack(grasped_preds, axis=1)
-            # remove later
-            # print("-----------Start----------")
-            # print('grasped_preds: ', grasped_preds)
-            # print("-----------End----------")
-            # import matplotlib.pyplot as plt
-            # fig, ax = plt.subplots(3,3)
-            # temp1 = (preds[0] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
-            # temp2 = (preds[1] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
-            # temp3 = (preds[2] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
-            # temp4 = (preds[3] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
-            # temp5 = (preds[4] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
-            # ax[0][0].imshow(temp1[1])
-            # ax[0][1].imshow(temp1[3])
-            # ax[0][2].imshow(temp1[5])
-            # ax[1][0].imshow(temp2[1])
-            # ax[1][1].imshow(temp2[3])
-            # ax[1][2].imshow(temp2[5])
-            # ax[2][0].imshow(temp3[1])
-            # ax[2][1].imshow(temp3[3])
-            # ax[2][2].imshow(temp3[5])
-            # plt.show()
-            # print("preds, grasped_preds: ", preds.shape, grasped_preds.shape)
+        if False:
+            pass
+        # if self.training and self.multistep:
+        #     preds = []
+        #     grasped_preds = []
+        #     for i in range(1, video_len):
+        #         h, h_target = hidden[:, i - 1], hidden[:, i]
+        #         if i > self.n_past:
+        #             h, _ = self.encoder(pred)
+        #         (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
+        #         (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
+        #         # print("shapes, h, actions, z_t: ", h.shape, actions.shape, z_t.shape)
+        #         inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+        #         (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
+        #         # print("h_pred: ", h_pred.shape)
+        #         h_pred = torch.sigmoid(h_pred)  # TODO notice
+        #         h_preds.append(h_pred)
+        #         means.append(mu)
+        #         logvars.append(logvar)
+        #         kld += self.kl_divergence(
+        #             mu, logvar, prior_mu, prior_logvar, batch_size
+        #         )
+        #         pred = self.decoder(h_pred, skips, has_time_dim=False)
+        #         print("-------- Start ----------")
+        #         for b in range(5):
+        #             print(f"{b} element in batch 1. h_pred: ", h_pred[b, :5])
+        #         print("------- End ------")
+        #         grasped_pred = self.grasped_fcn(h_pred)
+        #         # print("pred: ", pred.shape)
+        #         preds.append(pred)
+        #         grasped_preds.append(grasped_pred)
+        #     preds = torch.stack(preds, axis=1)
+        #     grasped_preds = torch.stack(grasped_preds, axis=1)
+        #     # remove later
+        #     # print("-----------Start----------")
+        #     # print('grasped_preds: ', grasped_preds)
+        #     # print("-----------End----------")
+        #     # import matplotlib.pyplot as plt
+        #     # fig, ax = plt.subplots(3,3)
+        #     # temp1 = (preds[0] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
+        #     # temp2 = (preds[1] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
+        #     # temp3 = (preds[2] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
+        #     # temp4 = (preds[3] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
+        #     # temp5 = (preds[4] * 255).to(torch.uint8).cpu().permute(0,2,3,1)
+        #     # ax[0][0].imshow(temp1[1])
+        #     # ax[0][1].imshow(temp1[3])
+        #     # ax[0][2].imshow(temp1[5])
+        #     # ax[1][0].imshow(temp2[1])
+        #     # ax[1][1].imshow(temp2[3])
+        #     # ax[1][2].imshow(temp2[5])
+        #     # ax[2][0].imshow(temp3[1])
+        #     # ax[2][1].imshow(temp3[3])
+        #     # ax[2][2].imshow(temp3[5])
+        #     # plt.show()
+        #     # print("preds, grasped_preds: ", preds.shape, grasped_preds.shape)
         else:
             for i in range(1, video_len):
-                h, h_target = hidden[:, i - 1], hidden[:, i]
-                (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
-                (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
-                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                # h, h_target = hidden[:, i - 1], hidden[:, i]
+                # if self.stochastic:
+                #     (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
+                #     (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
+                # else:
+                z_t = torch.zeros((grasped.shape[0], self.z_dim)).to(grasped)
+                inp = self.get_input(None, actions[:, i - 1], z_t, grasped[:, i - 1])
+                print("inp.shape: ", inp.shape)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 h_preds.append(h_pred)
-                means.append(mu)
-                logvars.append(logvar)
-                kld += self.kl_divergence(
-                    mu, logvar, prior_mu, prior_logvar, batch_size
-                )
+                # if self.stochastic:
+                #     means.append(mu)
+                #     logvars.append(logvar)
+                #     kld += self.kl_divergence(
+                #         mu, logvar, prior_mu, prior_logvar, batch_size
+                #     )
+
             h_preds = torch.stack(h_preds, axis=1)
-            preds = self.decoder(h_preds, skips)
+            # preds = self.decoder(h_preds, skips)
+            preds = None
+            grasped_preds = self.grasped_fcn(h_preds)
+
 
         if self.stochastic:
             means = torch.stack(means, axis=1)
             logvars = torch.stack(logvars, axis=1)
         else:
-            means, logvars = torch.zeros(h.shape[0], video_len - 1, 1).to(
-                h
-            ), torch.zeros(h.shape[0], video_len - 1, 1).to(h)
+            means, logvars = torch.zeros(grasped.shape[0], video_len - 1, 1).to(
+                grasped
+            ), torch.zeros(grasped.shape[0], video_len - 1, 1).to(grasped)
         return preds, kld, means, logvars, grasped_preds
 
     def evaluate(self, batch, compute_metrics=False):
-        ag_metrics, ag_preds, ag_grasped_preds = self._evaluate(
-            batch, compute_metrics, autoregressive=True
-        )
+        # ag_metrics, ag_preds, ag_grasped_preds = self._evaluate(
+        #     batch, compute_metrics, autoregressive=True
+        # )
         non_ag_metrics, non_ag_preds, non_ag_grasped_preds = self._evaluate(
             batch, compute_metrics, autoregressive=False
         )
-        ag_metrics = {f"ag/{k}": v for k, v in ag_metrics.items()}
+        ag_metrics = {}
+        # ag_metrics = {f"ag/{k}": v for k, v in ag_metrics.items()}
         non_ag_metrics = {f"non_ag/{k}": v for k, v in non_ag_metrics.items()}
         metrics = {**ag_metrics, **non_ag_metrics}
-        return metrics, dict(ag=ag_preds, non_ag=non_ag_preds), dict(ag=ag_grasped_preds, non_ag=non_ag_grasped_preds)
+        return metrics, dict(non_ag=non_ag_grasped_preds)
 
     def _evaluate(self, batch, compute_metrics=False, autoregressive=True):
         """Predict the full video conditioned on the first self.n_past frames."""
-        video, actions, segmentation, grasped = (
+        video, actions, segmentation, grasped_gt = (
             batch["video"],
             batch["actions"],
             batch.get("segmentation", None),
@@ -610,139 +626,148 @@ class FitVid(nn.Module):
         # print("in evaluate: video, grasped, actions", video.shape, grasped.shape, actions.shape)
         batch_size, video_len = video.shape[0], video.shape[1]
         pred_state = prior_state = post_state = None
-        video = video.view(
-            (batch_size * video_len,) + video.shape[2:]
-        )  # collapse first two dims
+        # video = video.view(
+        #     (batch_size * video_len,) + video.shape[2:]
+        # )  # collapse first two dims
         # print("video.shape: ", video.shape)
-        hidden, skips = self.encoder(video)
+        # hidden, skips = self.encoder(video)
         # print("hidden, skips: ", hidden.shape, skips.keys())
         # print("self.n_past: ", self.n_past)
-        skips = {
-            k: skips[k].view(
-                (
-                    batch_size,
-                    video_len,
-                )
-                + tuple(skips[k].shape[1:])
-            )[:, self.n_past - 1]
-            for k in skips.keys()
-        }
+        # skips = {
+        #     k: skips[k].view(
+        #         (
+        #             batch_size,
+        #             video_len,
+        #         )
+        #         + tuple(skips[k].shape[1:])
+        #     )[:, self.n_past - 1]
+        #     for k in skips.keys()
+        # }
         # print("skpis: ", skips.keys())
         # evaluating
         preds = []
         grasped_preds = []
-        hidden = hidden.view((batch_size, video_len) + hidden.shape[1:])
+        # hidden = hidden.view((batch_size, video_len) + hidden.shape[1:])
         # print("self.n_past:", self.n_past)
-        if autoregressive:
-            for i in range(1, video_len):
-                h, _ = hidden[:, i - 1], hidden[:, i]
-                if i > self.n_past:
-                    h, _ = self.encoder(pred)
-                if self.stochastic:
-                    (z_t, prior_mu, prior_logvar), prior_state = self.prior(
-                        h, prior_state
-                    )
-                else:
-                    z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)
-                # print("actions shapeee: ", actions.shape)
-                # print("to make inp: ", h.shape, actions[:, i - 1].shape, z_t.shape)
-                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
-                # print("inp.shapeeeeee: ", inp.shape)
-                # print("input to the frame predictor: ", inp.shape, pred_state)
-                (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
-                # print("h_pred shape: ", h_pred.shape)
-                h_pred = torch.sigmoid(h_pred)  # TODO notice
-                # print("h_pred shape: ", h_pred.shape)
-                pred = self.decoder(h_pred[None, :], skips)[0]
-                grasped_pred = self.grasped_fcn(h_pred)
-                grasped_pred = torch.sigmoid(grasped_pred) 
-                # print("pred shape: ", pred.shape)
-                preds.append(pred)
-                grasped_preds.append(grasped_pred)
-            preds = torch.stack(preds, axis=1)
-            grasped_preds = torch.stack(grasped_preds, axis=1)
+        if False:
+            pass
+        # if autoregressive:
+        #     for i in range(1, video_len):
+        #         h, _ = hidden[:, i - 1], hidden[:, i]
+        #         if i > self.n_past:
+        #             h, _ = self.encoder(pred)
+        #         if self.stochastic:
+        #             (z_t, prior_mu, prior_logvar), prior_state = self.prior(
+        #                 h, prior_state
+        #             )
+        #         else:
+        #             z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)
+        #         # print("actions shapeee: ", actions.shape)
+        #         # print("to make inp: ", h.shape, actions[:, i - 1].shape, z_t.shape)
+        #         inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+        #         # print("inp.shapeeeeee: ", inp.shape)
+        #         # print("input to the frame predictor: ", inp.shape, pred_state)
+        #         (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
+        #         # print("h_pred shape: ", h_pred.shape)
+        #         h_pred = torch.sigmoid(h_pred)  # TODO notice
+        #         # print("h_pred shape: ", h_pred.shape)
+        #         pred = self.decoder(h_pred[None, :], skips)[0]
+        #         grasped_pred = self.grasped_fcn(h_pred)
+        #         grasped_pred = torch.sigmoid(grasped_pred) 
+        #         # print("pred shape: ", pred.shape)
+        #         preds.append(pred)
+        #         grasped_preds.append(grasped_pred)
+        #     preds = torch.stack(preds, axis=1)
+        #     grasped_preds = torch.stack(grasped_preds, axis=1)
         else:
             h_preds = []
             kld = torch.tensor(0).to(video)
             for i in range(1, video_len):
-                h, h_target = hidden[:, i - 1], hidden[:, i]
-                (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
-                (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
-                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                # h, h_target = hidden[:, i - 1], hidden[:, i]
+                # (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
+                # (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
+                z_t = torch.zeros((grasped_gt.shape[0], self.z_dim)).to(grasped_gt)
+                inp = self.get_input(None, actions[:, i - 1], z_t, grasped_gt[:, i - 1])
                 # print("2inp.shapeeeeee: ", inp.shape)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 h_preds.append(h_pred)
-                kld += self.kl_divergence(
-                    mu, logvar, prior_mu, prior_logvar, batch_size
-                )
+                # kld += self.kl_divergence(
+                #     mu, logvar, prior_mu, prior_logvar, batch_size
+                # )
             h_preds = torch.stack(h_preds, axis=1)
-            preds = self.decoder(h_preds, skips)
+            # preds = self.decoder(h_preds, skips)
+            preds = None
+            grasped_preds = self.grasped_fcn(h_preds)
+            grasped_preds = torch.sigmoid(grasped_preds) 
 
-        video = video.view(
-            (
-                batch_size,
-                video_len,
-            )
-            + video.shape[1:]
-        )  # reconstuct first two dims
-        mse_per_sample = pixel_wise_loss(
-            preds, video[:, 1:], loss="l2", reduce_batch=False
-        )
-        mse = mse_per_sample.mean()
-        l1_loss_per_sample = pixel_wise_loss(
-            preds, video[:, 1:], loss="l1", reduce_batch=False
-        )
-        l1_loss = l1_loss_per_sample.mean()
-        metrics = {
-            "loss/mse": mse,
-            "loss/mse_per_sample": mse_per_sample,
-            "loss/l1_loss": l1_loss,
-            "loss/l1_loss_per_sample": l1_loss_per_sample,
-        }
+        print("grasped_preds, grasped_gt: ", grasped_preds.shape, grasped_gt.shape)
+        # video = video.view(
+        #     (
+        #         batch_size,
+        #         video_len,
+        #     )
+        #     + video.shape[1:]
+        # )  # reconstuct first two dims
+        # mse_per_sample = pixel_wise_loss(
+        #     preds, video[:, 1:], loss="l2", reduce_batch=False
+        # )
+        # mse = mse_per_sample.mean()
+        # l1_loss_per_sample = pixel_wise_loss(
+        #     preds, video[:, 1:], loss="l1", reduce_batch=False
+        # )
+        # l1_loss = l1_loss_per_sample.mean()
+        # metrics = {
+        #     "loss/mse": mse,
+        #     "loss/mse_per_sample": mse_per_sample,
+        #     "loss/l1_loss": l1_loss,
+        #     "loss/l1_loss_per_sample": l1_loss_per_sample,
+        # }
 
-        if compute_metrics:
-            if segmentation is not None:
-                metrics.update(
-                    self.compute_metrics(preds, video[:, 1:], segmentation[:, 1:])
-                )
-            else:
-                metrics.update(self.compute_metrics(preds, video[:, 1:]))
+        # if compute_metrics:
+        #     if segmentation is not None:
+        #         metrics.update(
+        #             self.compute_metrics(preds, video[:, 1:], segmentation[:, 1:])
+        #         )
+        #     else:
+        #         metrics.update(self.compute_metrics(preds, video[:, 1:]))
 
         preds = dict(rgb=preds)
 
-        if self.has_depth_predictor:
-            with torch.no_grad():
-                depth_preds = self.depth_predictor(preds["rgb"], time_axis=True)
-                depth_video = batch["depth_video"]
-                depth_loss_per_sample = self.depth_predictor.depth_loss(
-                    depth_preds, depth_video[:, 1:], reduce_batch=False
-                )
-                depth_loss = depth_loss_per_sample.mean()
-                metrics.update(
-                    {
-                        "loss/depth_loss": depth_loss,
-                        "loss/depth_loss_per_sample": depth_loss_per_sample,
-                    }
-                )
+        # if self.has_depth_predictor:
+        #     with torch.no_grad():
+        #         depth_preds = self.depth_predictor(preds["rgb"], time_axis=True)
+        #         depth_video = batch["depth_video"]
+        #         depth_loss_per_sample = self.depth_predictor.depth_loss(
+        #             depth_preds, depth_video[:, 1:], reduce_batch=False
+        #         )
+        #         depth_loss = depth_loss_per_sample.mean()
+        #         metrics.update(
+        #             {
+        #                 "loss/depth_loss": depth_loss,
+        #                 "loss/depth_loss_per_sample": depth_loss_per_sample,
+        #             }
+        #         )
 
-            preds["depth"] = depth_preds
+        #     preds["depth"] = depth_preds
 
-        if self.has_normal_predictor:
-            with torch.no_grad():
-                normal_preds = self.normal_predictor(preds["rgb"], time_axis=True)
-                normal_video = batch["normal"]
-                normal_loss_per_sample = mse_loss(
-                    normal_preds, normal_video[:, 1:], reduce_batch=False
-                )
-                normal_loss = normal_loss_per_sample.mean()
-                metrics.update(
-                    {
-                        "loss/normal_loss": normal_loss,
-                        "loss/normal_loss_per_sample": normal_loss_per_sample,
-                    }
-                )
-            preds["normal"] = normal_preds
+        # if self.has_normal_predictor:
+        #     with torch.no_grad():
+        #         normal_preds = self.normal_predictor(preds["rgb"], time_axis=True)
+        #         normal_video = batch["normal"]
+        #         normal_loss_per_sample = mse_loss(
+        #             normal_preds, normal_video[:, 1:], reduce_batch=False
+        #         )
+        #         normal_loss = normal_loss_per_sample.mean()
+        #         metrics.update(
+        #             {
+        #                 "loss/normal_loss": normal_loss,
+        #                 "loss/normal_loss_per_sample": normal_loss_per_sample,
+        #             }
+        #         )
+        #     preds["normal"] = normal_preds
+        metrics = {}
+
         return metrics, preds, grasped_preds
 
     def test(self, batch):
