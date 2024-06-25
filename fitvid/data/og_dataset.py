@@ -157,7 +157,7 @@ class SequenceDataset(torch.utils.data.Dataset):
                     print(f"Sequence {ep} can't be used with this sequence length")
                     #assert num_sequences >= 1  # assume demo_length >= (self.n_frame_stack - 1 + self.seq_length)
 
-            print("num_sequences: ", num_sequences)
+            # print("num_sequences: ", num_sequences)
             for _ in range(num_sequences):
                 self._index_to_demo_id[self.total_num_sequences] = ep
                 self.total_num_sequences += 1
@@ -359,7 +359,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         demo_index_offset = 0 if self.pad_frame_stack else (self.n_frame_stack - 1)
         
         # # remove later
-        # demo_index_offset = 8
+        # demo_index_offset = 5
 
         index_in_demo = index - demo_start_index + demo_index_offset
         # print("index, index_in_demo: ", index, index_in_demo)

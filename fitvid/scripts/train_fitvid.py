@@ -50,13 +50,13 @@ flags.DEFINE_boolean(
 )
 flags.DEFINE_float("weight_decay", 0.0, "weight decay value")
 flags.DEFINE_float("adam_eps", 1e-8, "epsilon parameter for Adam optimizer")
-flags.DEFINE_boolean("stochastic", True, "Use a stochastic model.")
-flags.DEFINE_boolean("multistep", True, "Multi-step training.")  # changed
+flags.DEFINE_boolean("stochastic", False, "Use a stochastic model.")
+flags.DEFINE_boolean("multistep", False, "Multi-step training.")  # changed
 flags.DEFINE_boolean(
     "fp16", False, "Use lower precision training for perf improvement."
 )  # changed
 flags.DEFINE_float("rgb_weight", 1, "Weight on rgb objective (default 1).")
-flags.DEFINE_float("grasped_weight", 1, "Weight on grasped objective (default 1).")
+flags.DEFINE_float("grasped_weight", 0.01, "Weight on grasped objective (default 1).")
 flags.DEFINE_boolean(
     "fitvid_augment", False, "Use fitvid-style data augmentation."
 )  # changed
