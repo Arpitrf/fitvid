@@ -131,12 +131,19 @@ def partition_dataset_train_valid(dataset):
     file = h5py.File(hdf5_file_path, 'a')
     all_keys = list(file['data'].keys())
 
+    if 'mask' in file:
+        print("deleting")
+        input()
+        del file['mask']
+        
+    print("file.keys: ", file.keys())
+
     # Shuffle the keys
     random.shuffle(all_keys)
     print("all_keys: ", all_keys)
 
     # Calculate the number of test samples (10% of the total data)
-    num_test_samples = int(len(all_keys) * 0.1)
+    num_test_samples = min(int(len(all_keys) * 0.1), 50)
 
     # Split the keys into train and test sets
     test_keys = all_keys[:num_test_samples]

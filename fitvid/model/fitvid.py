@@ -764,7 +764,9 @@ class FitVid(nn.Module):
 
     def test(self, batch):
         """Predict the full video conditioned on the first self.n_past frames."""
-        video, actions = batch["video"], batch["actions"]
+        video, actions, grasped = batch["video"], batch["actions"], batch["grasped"]
+        # print("self.n_past: ", self.n_past)
+        # print("video, actions, grasped: ", video.shape, actions.shape, grasped.shape)
         batch_size, video_len = video.shape[0], video.shape[1]
         action_len = actions.shape[1]
         pred_state = prior_state = None
@@ -784,22 +786,36 @@ class FitVid(nn.Module):
         }
         # evaluating
         preds = []
+        grasped_preds = []
         hidden = hidden.view((batch_size, video_len) + hidden.shape[1:])
         for i in range(1, action_len + 1):
             if i <= self.n_past:
                 h = hidden[:, i - 1]
+                g = grasped[:, i - 1]
+                # print("11 g.shape: ", g.shape)
             if i > self.n_past:
                 h, _ = self.encoder(pred)
+                # g = grasped[:, i - 1]
+                # print("22grasped_pred: ", grasped_pred.shape, grasped_pred[:20])
+                g = torch.round(grasped_pred)
+                # print("22g: ", g.shape, g[:20])
+
             if self.stochastic:
                 (z_t, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
             else:
                 z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)
-            inp = self.get_input(h, actions[:, i - 1], z_t)
+            inp = self.get_input(h, actions[:, i - 1], z_t, g)
             (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
             h_pred = torch.sigmoid(h_pred)  # TODO notice
             pred = self.decoder(h_pred[None, :], skips)[0]
+            grasped_pred = self.grasped_fcn(h_pred)
+            grasped_pred = torch.sigmoid(grasped_pred) 
+            
             preds.append(pred)
+            grasped_preds.append(grasped_pred)
         preds = torch.stack(preds, axis=1)
+        grasped_preds = torch.stack(grasped_preds, axis=1)
+        
         video = video.view(
             (
                 batch_size,
@@ -807,7 +823,7 @@ class FitVid(nn.Module):
             )
             + video.shape[1:]
         )  # reconstuct first two dims
-        return preds
+        return preds, grasped_preds
 
     def load_parameters(self, path):
         # load everything
