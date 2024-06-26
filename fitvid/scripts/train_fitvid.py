@@ -26,7 +26,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_integer("seed", 0, "Random seed.")  # changed
 flags.DEFINE_boolean("debug", False, "Debug mode.")  # changed
 flags.DEFINE_integer("batch_size", 32, "Batch size.")  # changed
-flags.DEFINE_integer("n_past", 2, "Number of past frames.")
+flags.DEFINE_integer("n_past", 1, "Number of past frames.")
 flags.DEFINE_integer(
     "n_future", 7, "Number of future frames."
 )  # not used, inferred directly from data
