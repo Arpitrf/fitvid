@@ -8,11 +8,20 @@ import numpy as np
 # partition_dataset_train_valid('/home/arpit/test_projects/OmniGibson/backup/dataset_new.hdf5')
 
 # f = h5py.File('/home/arpit/test_projects/OmniGibson/backup/dataset_new.hdf5', "r") 
-f = h5py.File('/home/arpit/test_projects/OmniGibson/dynamics_model_dataset/dataset.hdf5', "r") 
-print(len(f['data'].keys()))
+f = h5py.File('/home/arpit/projects/fitvid/dynamics_model_dataset/dataset.hdf5', "r") 
+# print(f['mask']['train'])
 # print("---", 'data' in f.keys())
 # print(f['episode_00001']['extras'].keys())
-# demos = f["data"].keys()
+demos = f["data"].keys()
+demo_lens = []
+for i, demo in enumerate(demos):
+    if i < 700:
+        continue
+    len = np.array(f[f'data/{demo}/actions/actions']).shape[0]
+    demo_lens.append(len)
+
+sorted_demo_lens = sorted(demo_lens)
+print("sorted_demo_len: ", sorted_demo_lens)
 # print("demos: ", len(demos))
 # print("f[masks]: ", f['mask']['train'])
 # print("f[masks]: ", f['mask']['valid'])

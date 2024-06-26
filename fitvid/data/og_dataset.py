@@ -146,8 +146,8 @@ class SequenceDataset(torch.utils.data.Dataset):
             if not self.pad_seq_length:
                 num_sequences -= (self.seq_length - 1)
 
-            # Added by arpit
-            num_sequences = 8
+            # # Added by arpit
+            # num_sequences = 6
 
             if self.pad_seq_length:
                 assert demo_length >= 1  # sequence needs to have at least one sample
@@ -157,7 +157,7 @@ class SequenceDataset(torch.utils.data.Dataset):
                     print(f"Sequence {ep} can't be used with this sequence length")
                     #assert num_sequences >= 1  # assume demo_length >= (self.n_frame_stack - 1 + self.seq_length)
 
-            # print("num_sequences: ", num_sequences)
+            print("num_sequences: ", num_sequences)
             for _ in range(num_sequences):
                 self._index_to_demo_id[self.total_num_sequences] = ep
                 self.total_num_sequences += 1
