@@ -5,3 +5,6 @@ output/
 run_*
 wandb/
 temp/
+dynamics_model_dataset/
+medium_grasp_dataset/
+small_grasp_dataset/
