@@ -641,7 +641,9 @@ class FitVid(nn.Module):
         mse_per_sample = pixel_wise_loss(
             preds, video[:, 1:], loss="l2", reduce_batch=False
         )
+        print("mse_per_sample: ", mse_per_sample)
         mse = mse_per_sample.mean()
+        print("mse: ", mse)
         l1_loss_per_sample = pixel_wise_loss(
             preds, video[:, 1:], loss="l1", reduce_batch=False
         )

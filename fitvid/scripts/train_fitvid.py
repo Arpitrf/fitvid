@@ -255,6 +255,9 @@ def main(argv):
     depth_weight = FLAGS.depth_weight
     normal_weight = FLAGS.normal_weight
 
+    print("--", FLAGS.stochastic)
+    input()
+
     loss_weights = {
         "kld": FLAGS.beta,
         "rgb": rgb_weight,
@@ -455,6 +458,9 @@ def main(argv):
                     metrics, eval_preds = model.module.evaluate(
                         batch, compute_metrics=test_batch_idx % 1 == 0
                     )
+                    print("eval_preds.shape: ", eval_preds['ag']['rgb'].shape)
+                    print("metrics: ", metrics.keys())
+                    input()
                     if test_batch_idx < num_batch_to_save:
                         for ag_type, eval_pred in eval_preds.items():
                             # print("eval_pred[rgb]: ", eval_pred["rgb"].shape)

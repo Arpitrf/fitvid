@@ -54,6 +54,9 @@ def sobel_loss(t1, t2, reduce_batch=True):
 
 
 def pixel_wise_loss(t1, t2, loss="l2", reduce_batch=True, mask=None):
+    # t1 = t1 * 255
+    # t2 = t2 * 255
+
     if loss == "l2":
         pwl = (t1 - t2) ** 2
     elif loss == "l1":
@@ -61,6 +64,7 @@ def pixel_wise_loss(t1, t2, loss="l2", reduce_batch=True, mask=None):
     else:
         raise NotImplementedError("Only l2 and l1 losses are implemented")
 
+    # print("-----pwl: ", pwl.shape)
     if mask is not None:
         pwl = mask * pwl
     if reduce_batch:
