@@ -302,7 +302,7 @@ def main(argv):
     )
     print(f"Built FitVid model with {count_parameters(model_fitvid)} parameters!")
     # TODO: Load parameters for the fitvid model
-    pretrianed_model_fitvid_path = '/home/arpit/test_projects/vp2/vp2/pretrained_models/fitvid/model_det_900'
+    pretrianed_model_fitvid_path = '/home/arpit/test_projects/vp2/vp2/pretrained_models/fitvid/model_det_900_epoch325'
     model_fitvid.load_parameters(pretrianed_model_fitvid_path)
 
     model = GraspedModel(
@@ -330,6 +330,7 @@ def main(argv):
     )
     if checkpoint:
         model.load_parameters(checkpoint)
+    input()
 
     # model.setup_train_losses()
 
@@ -443,6 +444,7 @@ def main(argv):
     train_losses = []
     train_mse = []
     test_mse = []
+    test_bce = []
     num_epochs = FLAGS.num_epochs
     train_steps = 0
     num_batch_to_save = 1
@@ -458,137 +460,71 @@ def main(argv):
     for epoch in range(resume_epoch + 1, num_epochs):
         print(f"\nEpoch {epoch} / {num_epochs}")
         
-        # print("Evaluating")
-        # model.eval()
-        # with torch.no_grad():
-        #     epoch_mse = []
-        #     eval_metrics = dict()
-        #     wandb_log = dict()
-        #     total_test_batches = len(test_data_loader)
-        #     total_train_batches = len(data_loader)
-        #     print("type(data_loader): ", type(data_loader))
-        #     print(f"Total test batches: {total_test_batches}")
-        #     print(f"Total train batches: {total_train_batches}")
-        #     for iter_item in enumerate(tqdm(test_data_loader)):
-        #         test_batch_idx, batch = iter_item
-        #         # print("batchhhhhhhh: ", batch.keys())
-        #         # print("batch[video]: ", batch['video'].shape, batch['grasped'].shape, batch['actions'].shape)
-        #         batch = dict_to_cuda(batch)
-        #         with autocast() if FLAGS.fp16 else ExitStack() as ac:
-        #             metrics, eval_preds, eval_grasped_preds = model.module.evaluate(
-        #                 batch, compute_metrics=test_batch_idx % 1 == 0
-        #             )
-        #             if test_batch_idx < num_batch_to_save:
-        #                 for ag_type, eval_pred in eval_preds.items():
-        #                     # print("eval_pred[rgb]: ", eval_pred["rgb"].shape)
-        #                     if depth_predictor_kwargs:
-        #                         with torch.no_grad():
-        #                             gt_depth_preds = model.module.depth_predictor(
-        #                                 batch["video"][:, 1:]
-        #                             )
-        #                         test_videos_log = {
-        #                             "gt": batch["video"][:, 1:],
-        #                             "pred": eval_pred["rgb"],
-        #                             "gt_depth": batch["depth_video"][:, 1:],
-        #                             "gt_depth_pred": gt_depth_preds,
-        #                             "pred_depth": eval_pred["depth"],
-        #                             "rgb_loss": metrics[
-        #                                 f"{ag_type}/loss/mse_per_sample"
-        #                             ],
-        #                             "depth_loss_weight": model.module.loss_weights[
-        #                                 "depth"
-        #                             ],
-        #                             "depth_loss": metrics[
-        #                                 f"{ag_type}/loss/depth_loss_per_sample"
-        #                             ],
-        #                             "name": "Depth",
-        #                         }
-        #                         test_depth_visualization = build_visualization(
-        #                             **test_videos_log
-        #                         )
-        #                         wandb_log.update(
-        #                             {
-        #                                 f"{ag_type}/test_depth_vis": wandb.Video(
-        #                                     test_depth_visualization,
-        #                                     fps=4,
-        #                                     format="gif",
-        #                                 )
-        #                             }
-        #                         )
-        #                     else:  # only rgb or only depth case
-        #                         test_videos_log = {
-        #                             "gt": batch["video"][:, 1:],
-        #                             "pred": eval_pred["rgb"],
-        #                             "rgb_loss": metrics[
-        #                                 f"{ag_type}/loss/mse_per_sample"
-        #                             ],
-        #                         }
-        #                         test_visualization = build_visualization(
-        #                             **test_videos_log
-        #                         )
-        #                         wandb_log.update(
-        #                             {
-        #                                 f"{ag_type}/test_vis": wandb.Video(
-        #                                     test_visualization, fps=4, format="gif"
-        #                                 )
-        #                             }
-        #                         )
-        #                     if normal_predictor_kwargs:
-        #                         with torch.no_grad():
-        #                             gt_normal_preds = model.module.normal_predictor(
-        #                                 batch["video"][:, 1:]
-        #                             )
-        #                         test_videos_log = {
-        #                             "gt": batch["video"][:, 1:],
-        #                             "pred": eval_pred["rgb"],
-        #                             "gt_depth": batch["normal"][:, 1:],
-        #                             "gt_depth_pred": gt_normal_preds,
-        #                             "pred_depth": eval_pred["normal"],
-        #                             "rgb_loss": metrics["loss/mse_per_sample"],
-        #                             "depth_loss_weight": model.module.loss_weights[
-        #                                 "normal"
-        #                             ],
-        #                             "depth_loss": metrics[
-        #                                 "loss/normal_loss_per_sample"
-        #                             ],
-        #                             "name": "Normal",
-        #                         }
-        #                         test_normal_visualization = build_visualization(
-        #                             **test_videos_log
-        #                         )
-        #                         wandb_log.update(
-        #                             {
-        #                                 f"{ag_type}/test_normal_vis": wandb.Video(
-        #                                     test_normal_visualization,
-        #                                     fps=4,
-        #                                     format="gif",
-        #                                 )
-        #                             }
-        #                         )
-        #         epoch_mse.append(metrics["ag/loss/mse"].item())
-        #         for k, v in metrics.items():
-        #             if k in eval_metrics:
-        #                 eval_metrics[k].append(v)
-        #             else:
-        #                 eval_metrics[k] = [v]
-        #         if (
-        #             (FLAGS.debug and test_batch_idx > 25)
-        #             or test_batch_idx == 50
-        #             or test_batch_idx == total_test_batches - 1
-        #         ):
-        #             wandb_log.update(
-        #                 {
-        #                     f"eval/{k}": torch.stack(v).mean()
-        #                     for k, v in eval_metrics.items()
-        #                 }
-        #             )
-        #             wandb.log(wandb_log)
-        #             break
-        #     test_mse.append(np.mean(epoch_mse))
-        # print(f"Test MSE: {np.mean(epoch_mse)}")
+        print("Evaluating")
+        model.eval()
+        with torch.no_grad():
+            epoch_bce = []
+            eval_metrics = dict()
+            wandb_log = dict()
+            total_test_batches = len(test_data_loader)
+            total_train_batches = len(data_loader)
+            print("type(data_loader): ", type(data_loader))
+            print(f"Total test batches: {total_test_batches}")
+            print(f"Total train batches: {total_train_batches}")
+            for iter_item in enumerate(tqdm(test_data_loader)):
+                test_batch_idx, batch = iter_item
+                # print("batchhhhhhhh: ", batch.keys())
+                # print("batch[video]: ", batch['video'].shape, batch['grasped'].shape, batch['actions'].shape)
+                batch = dict_to_cuda(batch)
+                with autocast() if FLAGS.fp16 else ExitStack() as ac:
+                    metrics, eval_preds, eval_grasped_preds = model.module.evaluate(
+                        batch, compute_metrics=test_batch_idx % 1 == 0
+                    )
+                    if test_batch_idx < num_batch_to_save:
+                        for ag_type, eval_pred in eval_preds.items():
+                            # only rgb or only depth case
+                            test_videos_log = {
+                                "gt": batch["video"][:, 1:],
+                                "pred": eval_pred["rgb"],
+                                "rgb_loss": metrics[
+                                    f"{ag_type}/loss/mse_per_sample"
+                                ],
+                            }
+                            test_visualization = build_visualization(
+                                **test_videos_log
+                            )
+                            wandb_log.update(
+                                {
+                                    f"{ag_type}/test_vis": wandb.Video(
+                                        test_visualization, fps=4, format="gif"
+                                    )
+                                }
+                            )
+                epoch_bce.append(metrics["ag/loss/bce"].item())
+                eval_grasped_preds
+                for k, v in metrics.items():
+                    if k in eval_metrics:
+                        eval_metrics[k].append(v)
+                    else:
+                        eval_metrics[k] = [v]
+                if (
+                    (FLAGS.debug and test_batch_idx > 25)
+                    or test_batch_idx == 50
+                    or test_batch_idx == total_test_batches - 1
+                ):
+                    wandb_log.update(
+                        {
+                            f"eval/{k}": torch.stack(v).mean()
+                            for k, v in eval_metrics.items()
+                        }
+                    )
+                    wandb.log(wandb_log)
+                    break
+            test_bce.append(np.mean(epoch_bce))
+        print(f"Test BCE: {np.mean(epoch_bce)}")
 
-        # if test_mse[-1] == np.min(test_mse):
-        #     save_model_checkpoint(model, optimizer, "best")
+        if test_bce[-1] == np.min(test_bce):
+            save_model_checkpoint(model, optimizer, "best")
 
         print("Training")
         model.train()

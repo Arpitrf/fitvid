@@ -147,7 +147,7 @@ class SequenceDataset(torch.utils.data.Dataset):
                 num_sequences -= (self.seq_length - 1)
 
             # # Added by arpit
-            # num_sequences = 6
+            num_sequences = 1
 
             if self.pad_seq_length:
                 assert demo_length >= 1  # sequence needs to have at least one sample
@@ -359,7 +359,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         demo_index_offset = 0 if self.pad_frame_stack else (self.n_frame_stack - 1)
         
         # # remove later
-        # demo_index_offset = 5
+        demo_index_offset = 5
 
         index_in_demo = index - demo_start_index + demo_index_offset
         # print("index, index_in_demo: ", index, index_in_demo)

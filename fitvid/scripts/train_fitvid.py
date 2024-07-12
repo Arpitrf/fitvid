@@ -312,6 +312,10 @@ def main(argv):
     if checkpoint:
         model.load_parameters(checkpoint)
 
+    # remove later
+    pretrianed_model_fitvid_path = '/home/arpit/test_projects/vp2/vp2/pretrained_models/fitvid/model_det_900_epoch325'
+    model.load_parameters(pretrianed_model_fitvid_path)
+
     model.setup_train_losses()
 
     # dump model config
@@ -455,7 +459,7 @@ def main(argv):
                 # print("batch[video]: ", batch['video'].shape, batch['grasped'].shape, batch['actions'].shape)
                 batch = dict_to_cuda(batch)
                 with autocast() if FLAGS.fp16 else ExitStack() as ac:
-                    metrics, eval_preds, eval_grasped_preds = model.module.evaluate(
+                    metrics, eval_preds = model.module.evaluate(
                         batch, compute_metrics=test_batch_idx % 1 == 0
                     )
                     if test_batch_idx < num_batch_to_save:

@@ -18,10 +18,12 @@ fitvid/model/film.py
 fitvid/model/fitvid.py
 fitvid/model/nvae.py
 fitvid/scripts/__init__.py
+fitvid/scripts/arpit_trial.py
 fitvid/scripts/eval_multimodel_torch.py
 fitvid/scripts/eval_torch.py
 fitvid/scripts/finetune_depth_model.py
 fitvid/scripts/train_fitvid.py
+fitvid/scripts/train_grasped_model.py
 fitvid/scripts/train_surface_normal_model.py
 fitvid/utils/__init__.py
 fitvid/utils/corrwise_loss.py
