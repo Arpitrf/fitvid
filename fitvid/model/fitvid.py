@@ -612,6 +612,7 @@ class FitVid(nn.Module):
         self.multistep = kwargs["multistep"]
         self.z_dim = model_kwargs["z_dim"]
         self.num_video_channels = model_kwargs.get("video_channels", 3)
+        self.use_grasped = kwargs["use_grasped"]
 
         first_block_shape = [model_kwargs["first_block_shape"][-1]] + model_kwargs[
             "first_block_shape"
@@ -1027,7 +1028,10 @@ class FitVid(nn.Module):
                     (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
                 else:
                     z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)                # print("shapes, h, actions, z_t: ", h.shape, actions.shape, z_t.shape)
-                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                if self.use_grasped:
+                    inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                else:
+                    inp = self.get_input(h, actions[:, i - 1], z_t)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 # print("h_pred: ", h_pred.shape)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
@@ -1043,12 +1047,15 @@ class FitVid(nn.Module):
                 # for b in range(5):
                 #     print(f"{b} element in batch 1. h_pred: ", h_pred[b, :5])
                 # print("------- End ------")
-                grasped_pred = self.grasped_fcn(h_pred)
+                if self.use_grasped:
+                    grasped_pred = self.grasped_fcn(h_pred)
                 # print("pred: ", pred.shape)
                 preds.append(pred)
-                grasped_preds.append(grasped_pred)
+                if self.use_grasped:
+                    grasped_preds.append(grasped_pred)
             preds = torch.stack(preds, axis=1)
-            grasped_preds = torch.stack(grasped_preds, axis=1)
+            if self.use_grasped:
+                grasped_preds = torch.stack(grasped_preds, axis=1)
             # remove later
             # print("-----------Start----------")
             # print('grasped_preds: ', grasped_preds)
@@ -1079,7 +1086,10 @@ class FitVid(nn.Module):
                     (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
                 else:
                     z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)                
-                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                if self.use_grasped:          
+                    inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                else:
+                    inp = self.get_input(h, actions[:, i - 1], z_t)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 h_preds.append(h_pred)
@@ -1091,7 +1101,10 @@ class FitVid(nn.Module):
                     )
             h_preds = torch.stack(h_preds, axis=1)
             preds = self.decoder(h_preds, skips)
-            grasped_preds = self.grasped_fcn(h_preds)
+            if self.use_grasped:
+                grasped_preds = self.grasped_fcn(h_preds)
+            else:
+                grasped_preds = []
 
         if self.stochastic:
             means = torch.stack(means, axis=1)

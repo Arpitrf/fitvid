@@ -51,12 +51,13 @@ flags.DEFINE_boolean(
 flags.DEFINE_float("weight_decay", 0.0, "weight decay value")
 flags.DEFINE_float("adam_eps", 1e-8, "epsilon parameter for Adam optimizer")
 flags.DEFINE_boolean("stochastic", False, "Use a stochastic model.")
-flags.DEFINE_boolean("multistep", False, "Multi-step training.")  # changed
+flags.DEFINE_boolean("multistep", True, "Multi-step training.")  
 flags.DEFINE_boolean(
     "fp16", False, "Use lower precision training for perf improvement."
 )  # changed
 flags.DEFINE_float("rgb_weight", 1, "Weight on rgb objective (default 1).")
 flags.DEFINE_float("grasped_weight", 0.01, "Weight on grasped objective (default 1).")
+flags.DEFINE_boolean("use_grasped", False, "Use a stochastic model.")
 flags.DEFINE_boolean(
     "fitvid_augment", False, "Use fitvid-style data augmentation."
 )  # changed
@@ -259,15 +260,15 @@ def main(argv):
     grasped_weight = FLAGS.grasped_weight
 
     loss_weights = {
-        "kld": FLAGS.beta,
+        # "kld": FLAGS.beta,
         "rgb": rgb_weight,
-        "depth": depth_weight,
-        "normal": normal_weight,
-        "policy": FLAGS.policy_weight,
-        "lpips": FLAGS.lpips_weight,
-        "tv": FLAGS.tv_weight,
-        "segmented_object": FLAGS.segmented_object_weight,
-        "grasped": grasped_weight
+        # "depth": depth_weight,
+        # "normal": normal_weight,
+        # "policy": FLAGS.policy_weight,
+        # "lpips": FLAGS.lpips_weight,
+        # "tv": FLAGS.tv_weight,
+        # "segmented_object": FLAGS.segmented_object_weight,
+        # "grasped": grasped_weight
     }
 
     model_kwargs = dict(
@@ -299,6 +300,7 @@ def main(argv):
         loss_weights=loss_weights,
         rgb_loss_type=FLAGS.rgb_loss_type,
         corr_wise=FLAGS.corr_wise,
+        use_grasped=FLAGS.use_grasped
     )
     print(f"Built FitVid model with {count_parameters(model)} parameters!")
 
@@ -312,9 +314,9 @@ def main(argv):
     if checkpoint:
         model.load_parameters(checkpoint)
 
-    # remove later
-    pretrianed_model_fitvid_path = '/home/arpit/test_projects/vp2/vp2/pretrained_models/fitvid/model_det_900_epoch325'
-    model.load_parameters(pretrianed_model_fitvid_path)
+    # # remove later
+    # pretrianed_model_fitvid_path = '/home/arpit/test_projects/vp2/vp2/pretrained_models/fitvid/model_det_900_epoch325'
+    # model.load_parameters(pretrianed_model_fitvid_path)
 
     model.setup_train_losses()
 
