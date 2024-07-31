@@ -32,6 +32,7 @@ class EncoderBlock(nn.Module):
 
         stride = (2, 2) if downsample else (1, 1)
 
+        # print("in_channels, out_channels: ", in_channels, out_channels)
         self.Conv_0 = nn.Conv2d(
             in_channels=in_channels,
             out_channels=out_channels,
@@ -329,7 +330,10 @@ class ModularDecoder(nn.Module):
                 elif self.skip_type is not None:
                     raise Exception("Unknown Skip Type.")
         x = self.Conv_0(x)
-        x = torch.sigmoid(x)
+
+        # removed by Arpit as loss nn CrossEntropyLoss will apply softmax internally
+        # x = torch.sigmoid(x)
+        # x = torch.softmax(x, 1)
         if has_time_dim:  # add time dim back
             return x.view(
                 (

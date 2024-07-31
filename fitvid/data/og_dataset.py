@@ -57,6 +57,8 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         self.load_demo_info(filter_by_attribute=self.filter_by_attribute)
 
+        self.counter = 0
+
         # # maybe prepare for observation normalization
         # self.obs_normalization_stats = None
         # if self.hdf5_normalize_obs:
@@ -147,7 +149,7 @@ class SequenceDataset(torch.utils.data.Dataset):
                 num_sequences -= (self.seq_length - 1)
 
             # # Added by arpit
-            num_sequences = 1
+            # num_sequences = 1
 
             if self.pad_seq_length:
                 assert demo_length >= 1  # sequence needs to have at least one sample
@@ -216,10 +218,16 @@ class SequenceDataset(torch.utils.data.Dataset):
                 hd5key = "data/{}/{}/{}".format(ep, key, key)
             elif key == 'obs/rgb':
                 # print("in obs/rgbbbbbb")
-                hd5key = "data/{}/observations/rgb".format(ep)
+                # change later
+                # hd5key = "data/{}/observations/rgb".format(ep) 
+                hd5key = "data/{}/observations/gripper_obj_seg".format(ep) 
             elif key == 'grasped':
                 hd5key = "data/{}/extras/grasps".format(ep)
             ret = self.hdf5_file[hd5key]
+            # print("type(ret): ", type(ret))
+            # added by Arpit
+            # if key == 'obs/rgb':
+
         return ret
     
     def get_sequence_from_demo(self, demo_id, index_in_demo, keys, num_frames_to_stack=0, seq_length=1):
@@ -324,14 +332,57 @@ class SequenceDataset(torch.utils.data.Dataset):
             num_frames_to_stack=num_frames_to_stack,
             seq_length=seq_length,
         )
+        # print("11obs[k].shape: ", obs['obs/rgb'].shape)
         obs = {k.split('/')[1]: obs[k] for k in obs}  # strip the prefix
+        # print("22obs[k].shape: ", obs['rgb'].shape)
         if self.get_pad_mask:
             obs["pad_mask"] = pad_mask
 
         # prepare image observations from dataset
         for k in obs:
-            obs[k] = obs[k][:, :, :, :3]
-            obs[k] = np.transpose(obs[k], (0, 3, 1, 2))
+            # print("1obs[k].shape: ", obs[k].shape)   
+
+            # uncomment later
+            # obs[k] = obs[k][:, :, :, :3]
+            # obs[k] = np.transpose(obs[k], (0, 3, 1, 2))
+
+            # # Categorical to one-hot 
+            # seq_len, h, w = obs[k].shape[0], obs[k].shape[1], obs[k].shape[2]
+            # one_hot_encoded_image = np.zeros((seq_len, h, w, 20), dtype=int)
+            # for s in range(seq_len):
+            #     for i in range(h):
+            #         for j in range(w):
+            #             label = obs[k][s, i, j]
+            #             one_hot_encoded_image[s, i, j, label] = 1 
+            # vectorized: Very cool vectorization!!
+            seq_len, h, w = obs[k].shape[0], obs[k].shape[1], obs[k].shape[2]
+            one_hot_encoded_image = np.zeros((seq_len, h, w, 20), dtype=int)
+            one_hot_encoded_image[np.arange(seq_len)[:, None, None], np.arange(h)[None, :, None], np.arange(w)[None, None, :], obs[k]] = 1
+
+            # One-hot to categorical
+            # categorical_array = np.argmax(one_hot_encoded_image, axis=-1)
+            # # another way 
+            # indices = np.where(one_hot_encoded_image == 1)
+            # categorical_array = indices[-1].reshape(one_hot_encoded_image.shape[:-1])
+            # import matplotlib.pyplot as plt
+            # fig, ax = plt.subplots(1,2)
+            # ax[0].imshow(obs[k][0])
+            # ax[1].imshow(categorical_array[0])
+            # plt.show()
+                            
+            obs[k] = np.transpose(one_hot_encoded_image, (0, 3, 1, 2))
+
+            # # remove later
+            # gt = one_hot_encoded_image
+            # for b in range(bs):
+            #     for i in range(h):
+            #         for j in range(w):
+            #             gt_label = np.where(gt[b, i, j] == 1)
+            #             if len(gt_label[0]) == 0:
+            #                 print("gt[b, s, i, j]: ",gt[b, i, j])
+            #                 print("wowwwwwwwwwwwww")
+
+            # print("2obs[k].shape: ", obs[k].shape)   
         # print("obs: ", np.array(obs['agentview_shift_2_image']).shape, type(obs['agentview_shift_2_image']), type(obs['agentview_shift_2_image'][0][0][0][0]))
         # print("===================================================")
         # temp = ObsUtils.process_obs_dict(obs)
@@ -343,6 +394,8 @@ class SequenceDataset(torch.utils.data.Dataset):
         """
         Fetch dataset sequence @index (inferred through internal index map), using the getitem_cache if available.
         """
+        # self.counter += 1
+        # print("self.counter: ", self.counter, index)
         if self.hdf5_cache_mode == "all":
             return self.getitem_cache[index]
         return self.get_item(index)
@@ -359,7 +412,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         demo_index_offset = 0 if self.pad_frame_stack else (self.n_frame_stack - 1)
         
         # # remove later
-        demo_index_offset = 5
+        # demo_index_offset = 5
 
         index_in_demo = index - demo_start_index + demo_index_offset
         # print("index, index_in_demo: ", index, index_in_demo)
@@ -384,7 +437,26 @@ class SequenceDataset(torch.utils.data.Dataset):
             prefix="obs"
         )
 
+        # print("meta_obs: ", meta['obs']['rgb'].shape)
+        # breakpoint()
+        # print("11meta_obs: ", meta['obs']['rgb'].shape, meta['obs']['rgb'][0,:,0,0])
+        #TODO: commented out resize but bring it back
         meta["obs"] = self.resize_image_observations(meta["obs"], max=255)
+
+        # # remove later
+        # print("==============================================================================")
+        # gt = meta["obs"]['rgb'].transpose(0,2,3,1)
+        # bs, h, w = gt.shape[0], gt.shape[1], gt.shape[2]
+        # for b in range(bs):
+        #     for i in range(h):
+        #         for j in range(w):
+        #             gt_label = np.where(gt[b, i, j] == 1)
+        #             if len(gt_label[0]) == 0:
+        #                 print("gt[b, s, i, j]: ",gt[b, i, j])
+        #                 print("wowwwwwwwwwwwww")
+        # print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+
+        # print("22meta_obs: ", meta['obs']['rgb'].shape, meta['obs']['rgb'][0,:,0,0])
         return meta
     
     def resize_image_observations(self, obs, format='chw', max=1):
@@ -412,6 +484,10 @@ class SequenceDataset(torch.utils.data.Dataset):
                 interpolation_mode = InterpolationMode.BILINEAR
                 if 'seg' in k: # for segmentations, use Interpolation mode nearest to make sure things are still integers
                     interpolation_mode = InterpolationMode.NEAREST
+
+                # Added by Arpit. Forcing this interpolation mode as our obs is a segmentation
+                interpolation_mode = InterpolationMode.NEAREST
+
                 # if we have a video of any type, resize it
                 if 'seg' in k or 'depth' in k:
                     if len(v.shape) == 3:

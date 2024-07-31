@@ -247,9 +247,11 @@ def load_dataset_robomimic_torch(
         if normal:
             data_dict["normal"] = xs["obs"][f"{view}_normal"]
 
+        # commented by Arpit
         if "video" in data_dict:
-            # Normalize to [0, 1]
-            data_dict["video"] = data_dict["video"] / 255.0
+        #     # Normalize to [0, 1]
+            data_dict["video"] = data_dict["video"] / 1.0
+        #     data_dict["video"] = data_dict["video"] / 255.0
 
         # added by Arpit
         xs["grasped"] = xs["grasped"].unsqueeze(2)

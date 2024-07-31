@@ -7,10 +7,11 @@ import torch
 
 # edit_and_merge_hdf5('/home/arpit/test_projects/OmniGibson/backup/dataset.hdf5', '/home/arpit/test_projects/OmniGibson/backup/dataset_new.hdf5')
 
-# partition_dataset_train_valid('/home/arpit/test_projects/OmniGibson/backup/dataset.hdf5')
+partition_dataset_train_valid('/home/arpit/test_projects/OmniGibson/dynamics_model_dataset_seg/dataset.hdf5')
+
 
 # f = h5py.File('/home/arpit/test_projects/OmniGibson/backup/dataset_new.hdf5', "r") 
-f = h5py.File('/home/arpit/test_projects/OmniGibson/dynamics_model_dataset/dataset.hdf5', "r") 
+# f = h5py.File('/home/arpit/test_projects/OmniGibson/dynamics_model_dataset/dataset.hdf5', "r") 
 # print(len(f['data'].keys()))
 # print(f['mask']['train'])
 # print("---", 'data' in f.keys())
@@ -23,15 +24,15 @@ f = h5py.File('/home/arpit/test_projects/OmniGibson/dynamics_model_dataset/datas
 #     print(i, np.array(f[f'data/{demo}/actions/actions']))
 #     input()
 
-succ_episodes = 0
-for k in f['data'].keys():
-    grasps = np.array(f['data'][k]['extras']['grasps'])
-    # print("len(grasps): ", grasps.shape)
-    # print("k, grasps: ", k, grasps)
-    # print("----------------")
-    if any(grasps):
-        succ_episodes += 1
-print("succ episodes: ", succ_episodes)
+# succ_episodes = 0
+# for k in f['data'].keys():
+#     grasps = np.array(f['data'][k]['extras']['grasps'])
+#     # print("len(grasps): ", grasps.shape)
+#     # print("k, grasps: ", k, grasps)
+#     # print("----------------")
+#     if any(grasps):
+#         succ_episodes += 1
+# print("succ episodes: ", succ_episodes)
 
 # sorted_demo_lens = sorted(demo_lens)
 # print("sorted_demo_len: ", sorted_demo_lens)

@@ -4,6 +4,29 @@ import cv2
 import matplotlib.pyplot as plt
 from fitvid.utils.depth_utils import depth_to_rgb_im
 
+color_map = {
+    0: [0, 0, 0],         # Black
+    1: [128, 0, 0],       # Maroon
+    2: [0, 128, 0],       # Green
+    3: [128, 128, 0],     # Olive
+    4: [0, 0, 128],       # Navy
+    5: [128, 0, 128],     # Purple
+    6: [0, 128, 128],     # Teal
+    7: [128, 128, 128],   # Gray
+    8: [192, 192, 192],   # Silver
+    9: [255, 0, 0],       # Red
+    10: [0, 255, 0],      # Lime
+    11: [255, 255, 0],    # Yellow
+    12: [0, 0, 255],      # Blue
+    13: [255, 0, 255],    # Fuchsia
+    14: [0, 255, 255],    # Aqua
+    15: [255, 255, 255],  # White
+    16: [128, 128, 64],   # Yellow Green
+    17: [192, 0, 64],     # Scarlet
+    18: [64, 128, 192],   # Light Blue
+    19: [192, 64, 128]    # Pink
+}
+
 
 def build_visualization(
     gt,
@@ -23,15 +46,78 @@ def build_visualization(
         if gt.shape[-3] == 1:
             gt = np.moveaxis(depth_to_rgb_im(gt.detach().cpu().numpy(), cmap), 4, 2)
             pred = np.moveaxis(depth_to_rgb_im(pred.detach().cpu().numpy(), cmap), 4, 2)
+        elif gt.shape[-3] == 20:
+            # Convert from one-hot encoding (H x W x 20) to seg img (H x W x 1) 
+            gt = gt.detach().cpu().numpy()
+            pred = pred.detach().cpu().numpy()
+            bs, seq_len, h, w = gt.shape[0], gt.shape[1], gt.shape[-1], gt.shape[-2]
+            
+            gt = np.transpose(gt, (0, 1, 3, 4, 2))
+            pred = np.transpose(pred, (0, 1, 3, 4, 2))
+            print("gt.shape, pred.shape: ", gt.shape, pred.shape)
+            gt_seg_img = np.zeros((bs, seq_len, h, w), dtype=int)
+            pred_seg_img = np.zeros((bs, seq_len, h, w), dtype=int)
+
+            gt_seg_img = np.argmax(gt, axis=-1)
+            logSoftmax = torch.nn.LogSoftmax(dim=-1)
+            pred_torch = torch.from_numpy(pred)
+            out = logSoftmax(pred_torch).numpy()
+            pred_seg_img = np.argmax(out, axis=-1)
+
+            # for b in range(bs):
+            #     for s in range(seq_len):
+            #         for i in range(h):
+            #             for j in range(w):
+            #                 # gt_label = np.where(gt[b, s, i, j] == 1.0)
+            #                 # # if len(gt_label[0]) == 0:
+            #                 # #     print("gt[b, s, i, j]: ",gt[b, s, i, j])
+            #                 # #     print("wowwwwwwwwwwwwwwwwwwwwwwwwww")
+            #                 # #     continue
+            #                 # # print("gt_label: ", gt_label)
+            #                 # gt_label = gt_label[0][0]
+            #                 # gt_seg_img[b, s, i, j] = gt_label 
+
+            #                 pred_torch = torch.from_numpy(pred[b, s, i, j])
+            #                 # print("pred_torch: ", pred_torch)
+            #                 logSoftmax = torch.nn.LogSoftmax(dim=0)
+            #                 out = logSoftmax(pred_torch).numpy()
+            #                 # print("out: ", out)
+            #                 # pred_label = np.where(pred[b, s, i, j] == 1.0)[0][0] 
+            #                 max_index = np.argmax(out)
+            #                 pred_seg_img[b, s, i, j] = max_index 
+            # # obs[k] = np.transpose(one_hot_encoded_image, (0, 3, 1, 2))
+            gt = gt_seg_img
+            pred = pred_seg_img
+            print("gt, pred: ", gt.shape, pred.shape)
+
+            # convert segmentation images to rgb images for visualization
+            gt_rgb = np.zeros((gt.shape[0], gt.shape[1], gt.shape[2], gt.shape[3], 3))
+            pred_rgb = np.zeros((gt.shape[0], gt.shape[1], gt.shape[2], gt.shape[3], 3))
+
+            for class_id, color in color_map.items():
+                gt_rgb[gt == class_id] = color
+                pred_rgb[pred == class_id] = color
+            
+            gt_rgb = np.transpose(gt_rgb, (0, 1, 4, 2, 3))
+            pred_rgb = np.transpose(pred_rgb, (0, 1, 4, 2, 3))
+
+            # fig, ax = plt.subplots(1,2)
+            # ax[0].imshow(gt[0][0])
+            # ax[1].imshow(gt_rgb[0][0])
+            # plt.show()
+
         else:
             gt = gt.detach().cpu().numpy() * 255
             pred = pred.detach().cpu().numpy() * 255
 
-        rgb_loss_im = generate_sample_metric_imgs(rgb_loss.detach().cpu().numpy(), tlen)
-        image_rows = [gt, pred, rgb_loss_im]
+        # rgb_loss_im = generate_sample_metric_imgs(rgb_loss.detach().cpu().numpy(), tlen)
+        # print("rgb_loss_im: ", rgb_loss_im.shape)
+        # image_rows = [gt_rgb, pred_rgb, rgb_loss_im]
+        image_rows = [gt_rgb, pred_rgb]
         image_rows = np.concatenate(image_rows, axis=-1)  # create a horizontal row
         image_rows = np.concatenate(image_rows, axis=-2)  # create B rows
-        headers = ["GT", "Pred", "RGB Loss"]
+        # headers = ["GT", "Pred", "RGB Loss"]
+        headers = ["GT", "Pred"]
         text_headers = [generate_text_square(h) for h in headers]
         text_headers = np.concatenate(text_headers, axis=-1)
         text_headers = np.tile(text_headers[None], (tlen, 1, 1, 1))

@@ -612,10 +612,13 @@ class FitVid(nn.Module):
         self.multistep = kwargs["multistep"]
         self.z_dim = model_kwargs["z_dim"]
         self.num_video_channels = model_kwargs.get("video_channels", 3)
+        self.use_grasped = kwargs["use_grasped"]
 
         first_block_shape = [model_kwargs["first_block_shape"][-1]] + model_kwargs[
             "first_block_shape"
         ][:2]
+        print("num_input_channels: ", self.num_video_channels)
+        # input()
         self.encoder = ModularEncoder(
             stage_sizes=model_kwargs["stage_sizes"],
             output_size=model_kwargs["g_dim"],
@@ -859,6 +862,33 @@ class FitVid(nn.Module):
         )
         return loss, preds, metrics
 
+    def compute_seg_loss(self, preds, target):
+        print("preds, target shapes: ", preds.shape, target.shape)
+        criterion = nn.CrossEntropyLoss()
+        bs, seq_len, h, w = preds.shape[0], preds.shape[1], preds.shape[3], preds.shape[4]
+        # convert target from one-hot to seg value
+        target = target.permute(0,1,3,4,2)
+        target_seg = torch.argmax(target, axis=-1)
+
+        # target_seg = torch.zeros((bs, seq_len, h, w), dtype=int, device=torch.device("cuda"))
+        # for b in range(bs):
+        #     for s in range(seq_len):
+        #         for i in range(h):
+        #             for j in range(w):
+        #                 gt_label = torch.where(target[b, s, i, j] == 1.0)
+        #                 gt_label = gt_label[0][0]
+        #                 target_seg[b, s, i, j] = gt_label 
+        
+        seg_loss = 0
+        seg_loss_per_sample = []
+        for t in range(seq_len):
+            seg_loss += criterion(preds[:, t], target_seg[:, t])
+            seg_loss_per_sample.append(seg_loss)
+            print("seg_loss: ", seg_loss)
+        seg_loss /= seq_len  # Average loss over sequence length
+        seg_loss_per_sample = torch.Tensor(seg_loss_per_sample)
+        return seg_loss, seg_loss_per_sample
+    
     def compute_loss(
         self,
         preds,
@@ -884,6 +914,15 @@ class FitVid(nn.Module):
             elif loss == "kld":
                 total_loss += weight * kld
                 metrics["loss/kld"] = kld
+            elif loss == "gripper_object_segmentation":
+                seg_loss, seg_loss_per_sample = self.compute_seg_loss(
+                        preds["rgb"],
+                        video[:, 1:],
+                    )
+                total_loss += seg_loss * weight
+                metrics["loss/seg_loss_per_sample"] = seg_loss_per_sample
+                metrics["loss/seg_loss"] = seg_loss.detach()
+                # print("---", metrics["loss/seg_loss"], metrics["loss/seg_loss_per_sample"])
             elif loss == "rgb":
                 # initialize mask to be a torch tensor of all ones with same shape as video
                 with torch.no_grad():
@@ -1016,18 +1055,33 @@ class FitVid(nn.Module):
         # training
         h_preds = []
         if self.training and self.multistep:
+            # print("111111111111111111111111111111111111111111111111111111111111111111")
             preds = []
             grasped_preds = []
             for i in range(1, video_len):
                 h, h_target = hidden[:, i - 1], hidden[:, i]
                 if i > self.n_past:
+                    # print("pred.shape: ", pred.shape)
+                    # convert the predicted image (0.01, 0.09, 0.02, ...) to one-hot segmentation image (0, 1, 0, ...)
+                    pred = pred.permute(0,2,3,1)
+                    logSoftmax = torch.nn.LogSoftmax(dim=-1)
+                    out = logSoftmax(pred)
+                    inds = torch.argmax(out, axis=-1)
+                    pred_seg_img = torch.nn.functional.one_hot(inds, num_classes=pred.shape[-1]).type(torch.cuda.FloatTensor)
+                    print("pred_seg_img.shape: ", pred_seg_img.shape)
+                    pred = pred_seg_img.permute(0,3,1,2)
+                    print("pred.shape: ", pred.shape)
+                    
                     h, _ = self.encoder(pred)
                 if self.stochastic:
                     (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
                     (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
                 else:
                     z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)                # print("shapes, h, actions, z_t: ", h.shape, actions.shape, z_t.shape)
-                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                if self.use_grasped:
+                    inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                else:
+                    inp = self.get_input(h, actions[:, i - 1], z_t)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 # print("h_pred: ", h_pred.shape)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
@@ -1043,12 +1097,15 @@ class FitVid(nn.Module):
                 # for b in range(5):
                 #     print(f"{b} element in batch 1. h_pred: ", h_pred[b, :5])
                 # print("------- End ------")
-                grasped_pred = self.grasped_fcn(h_pred)
+                if self.use_grasped:
+                    grasped_pred = self.grasped_fcn(h_pred)
                 # print("pred: ", pred.shape)
                 preds.append(pred)
-                grasped_preds.append(grasped_pred)
+                if self.use_grasped:
+                    grasped_preds.append(grasped_pred)
             preds = torch.stack(preds, axis=1)
-            grasped_preds = torch.stack(grasped_preds, axis=1)
+            if self.use_grasped:
+                grasped_preds = torch.stack(grasped_preds, axis=1)
             # remove later
             # print("-----------Start----------")
             # print('grasped_preds: ', grasped_preds)
@@ -1072,14 +1129,18 @@ class FitVid(nn.Module):
             # plt.show()
             # print("preds, grasped_preds: ", preds.shape, grasped_preds.shape)
         else:
+            # print("2222222222222222222222222222222222222222222222222222222222222")
             for i in range(1, video_len):
                 h, h_target = hidden[:, i - 1], hidden[:, i]
                 if self.stochastic:
                     (z_t, mu, logvar), post_state = self.posterior(h_target, post_state)
                     (_, prior_mu, prior_logvar), prior_state = self.prior(h, prior_state)
                 else:
-                    z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)                
-                inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                    z_t = torch.zeros((h.shape[0], self.z_dim)).to(h)   
+                if self.use_grasped:          
+                    inp = self.get_input(h, actions[:, i - 1], z_t, grasped[:, i - 1])
+                else:
+                    inp = self.get_input(h, actions[:, i - 1], z_t)
                 (_, h_pred, _), pred_state = self.frame_predictor(inp, pred_state)
                 h_pred = torch.sigmoid(h_pred)  # TODO notice
                 h_preds.append(h_pred)
@@ -1091,7 +1152,10 @@ class FitVid(nn.Module):
                     )
             h_preds = torch.stack(h_preds, axis=1)
             preds = self.decoder(h_preds, skips)
-            grasped_preds = self.grasped_fcn(h_preds)
+            if self.use_grasped:
+                grasped_preds = self.grasped_fcn(h_preds)
+            else:
+                grasped_preds = []
 
         if self.stochastic:
             means = torch.stack(means, axis=1)
@@ -1152,6 +1216,17 @@ class FitVid(nn.Module):
             for i in range(1, video_len):
                 h, _ = hidden[:, i - 1], hidden[:, i]
                 if i > self.n_past:
+
+                    # convert the predicted image to segmentation image again
+                    pred = pred.permute(0,2,3,1)
+                    logSoftmax = torch.nn.LogSoftmax(dim=-1)
+                    out = logSoftmax(pred)
+                    inds = torch.argmax(out, axis=-1)
+                    pred_seg_img = torch.nn.functional.one_hot(inds, num_classes=pred.shape[-1]).type(torch.cuda.FloatTensor)
+                    print("pred_seg_img.shape: ", pred_seg_img.shape)
+                    pred = pred_seg_img.permute(0,3,1,2)
+                    print("pred.shape: ", pred.shape)
+
                     h, _ = self.encoder(pred)
                     # grasped_state = torch.round()
                 if self.stochastic:
@@ -1203,20 +1278,29 @@ class FitVid(nn.Module):
             )
             + video.shape[1:]
         )  # reconstuct first two dims
-        mse_per_sample = pixel_wise_loss(
-            preds, video[:, 1:], loss="l2", reduce_batch=False
-        )
-        mse = mse_per_sample.mean()
-        l1_loss_per_sample = pixel_wise_loss(
-            preds, video[:, 1:], loss="l1", reduce_batch=False
-        )
-        l1_loss = l1_loss_per_sample.mean()
-        metrics = {
-            "loss/mse": mse,
-            "loss/mse_per_sample": mse_per_sample,
-            "loss/l1_loss": l1_loss,
-            "loss/l1_loss_per_sample": l1_loss_per_sample,
-        }
+        # mse_per_sample = pixel_wise_loss(
+        #     preds, video[:, 1:], loss="l2", reduce_batch=False
+        # )
+        # mse = mse_per_sample.mean()
+        # l1_loss_per_sample = pixel_wise_loss(
+        #     preds, video[:, 1:], loss="l1", reduce_batch=False
+        # )
+        # l1_loss = l1_loss_per_sample.mean()
+        # metrics = {
+        #     "loss/mse": mse,
+        #     "loss/mse_per_sample": mse_per_sample,
+        #     "loss/l1_loss": l1_loss,
+        #     "loss/l1_loss_per_sample": l1_loss_per_sample,
+        # }
+
+        print("preds, video: ", preds.shape, video.shape)
+        seg_loss, seg_loss_per_sample = self.compute_seg_loss(
+                preds,
+                video[:, 1:],
+            )
+        metrics = {}
+        metrics["loss/seg_loss_per_sample"] = seg_loss_per_sample
+        metrics["loss/seg_loss"] = seg_loss.detach()
 
         if compute_metrics:
             if segmentation is not None:

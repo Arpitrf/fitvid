@@ -51,12 +51,13 @@ flags.DEFINE_boolean(
 flags.DEFINE_float("weight_decay", 0.0, "weight decay value")
 flags.DEFINE_float("adam_eps", 1e-8, "epsilon parameter for Adam optimizer")
 flags.DEFINE_boolean("stochastic", False, "Use a stochastic model.")
-flags.DEFINE_boolean("multistep", False, "Multi-step training.")  # changed
+flags.DEFINE_boolean("multistep", True, "Multi-step training.")  
 flags.DEFINE_boolean(
     "fp16", False, "Use lower precision training for perf improvement."
 )  # changed
 flags.DEFINE_float("rgb_weight", 1, "Weight on rgb objective (default 1).")
 flags.DEFINE_float("grasped_weight", 0.01, "Weight on grasped objective (default 1).")
+flags.DEFINE_boolean("use_grasped", False, "Use a stochastic model.")
 flags.DEFINE_boolean(
     "fitvid_augment", False, "Use fitvid-style data augmentation."
 )  # changed
@@ -258,16 +259,18 @@ def main(argv):
     normal_weight = FLAGS.normal_weight
     grasped_weight = FLAGS.grasped_weight
 
+    # change later
     loss_weights = {
-        "kld": FLAGS.beta,
-        "rgb": rgb_weight,
-        "depth": depth_weight,
-        "normal": normal_weight,
-        "policy": FLAGS.policy_weight,
-        "lpips": FLAGS.lpips_weight,
-        "tv": FLAGS.tv_weight,
-        "segmented_object": FLAGS.segmented_object_weight,
-        "grasped": grasped_weight
+        # "kld": FLAGS.beta,
+        # "rgb": rgb_weight,
+        # "depth": depth_weight,
+        # "normal": normal_weight,
+        # "policy": FLAGS.policy_weight,
+        # "lpips": FLAGS.lpips_weight,
+        # "tv": FLAGS.tv_weight,
+        # "segmented_object": FLAGS.segmented_object_weight,
+        # "grasped": grasped_weight,
+        "gripper_object_segmentation": 1
     }
 
     model_kwargs = dict(
@@ -284,7 +287,9 @@ def main(argv):
         action_size=FLAGS.action_size,
         expand_decoder=FLAGS.expand,
         stochastic=FLAGS.stochastic,
-        video_channels=1 if FLAGS.only_depth else 3,
+        # changed by Arpit
+        # video_channels=1 if FLAGS.only_depth else 3,
+        video_channels=20,
         lecun_initialization=FLAGS.lecun_initialization,
     )
 
@@ -299,6 +304,7 @@ def main(argv):
         loss_weights=loss_weights,
         rgb_loss_type=FLAGS.rgb_loss_type,
         corr_wise=FLAGS.corr_wise,
+        use_grasped=FLAGS.use_grasped
     )
     print(f"Built FitVid model with {count_parameters(model)} parameters!")
 
@@ -312,9 +318,9 @@ def main(argv):
     if checkpoint:
         model.load_parameters(checkpoint)
 
-    # remove later
-    pretrianed_model_fitvid_path = '/home/arpit/test_projects/vp2/vp2/pretrained_models/fitvid/model_det_900_epoch325'
-    model.load_parameters(pretrianed_model_fitvid_path)
+    # # remove later
+    # pretrianed_model_fitvid_path = '/home/arpit/test_projects/vp2/vp2/pretrained_models/fitvid/model_det_900_epoch325'
+    # model.load_parameters(pretrianed_model_fitvid_path)
 
     model.setup_train_losses()
 
@@ -456,15 +462,30 @@ def main(argv):
             for iter_item in enumerate(tqdm(test_data_loader)):
                 test_batch_idx, batch = iter_item
                 # print("batchhhhhhhh: ", batch.keys())
-                # print("batch[video]: ", batch['video'].shape, batch['grasped'].shape, batch['actions'].shape)
+                print("batch[video]: ", batch['video'].shape, batch['grasped'].shape, batch['actions'].shape)
+
+                # # remove later
+                # gt = batch['video'].permute(0,1,3,4,2)
+                # bs, seq_len, h, w = gt.shape[0], gt.shape[1], gt.shape[2], gt.shape[3]
+                # for b in range(bs):
+                #     for s in range(seq_len):
+                #         for i in range(h):
+                #             for j in range(w):
+                #                 gt_label = np.where(gt[b, s, i, j] == 1.0)
+                #                 if len(gt_label[0]) == 0:
+                #                     print("gt[b, s, i, j]: ",gt[b, s, i, j])
+                #                     print("wowwwwwwwwwwwww")
+                # input()
+                
                 batch = dict_to_cuda(batch)
                 with autocast() if FLAGS.fp16 else ExitStack() as ac:
                     metrics, eval_preds = model.module.evaluate(
-                        batch, compute_metrics=test_batch_idx % 1 == 0
+                        batch, compute_metrics=False # change later to compute_metrics=test_batch_idx % 1 == 0
                     )
                     if test_batch_idx < num_batch_to_save:
                         for ag_type, eval_pred in eval_preds.items():
-                            # print("eval_pred[rgb]: ", eval_pred["rgb"].shape)
+                            print("batch['video'].shape, eval_pred[rgb]: ", batch['video'].shape, eval_pred["rgb"].shape)
+                            # input()
                             if depth_predictor_kwargs:
                                 with torch.no_grad():
                                     gt_depth_preds = model.module.depth_predictor(
@@ -503,9 +524,10 @@ def main(argv):
                                 test_videos_log = {
                                     "gt": batch["video"][:, 1:],
                                     "pred": eval_pred["rgb"],
-                                    "rgb_loss": metrics[
-                                        f"{ag_type}/loss/mse_per_sample"
-                                    ],
+                                    "rgb_loss": metrics[f"{ag_type}/loss/seg_loss_per_sample"],
+                                    # "rgb_loss": metrics[
+                                    #     f"{ag_type}/loss/mse_per_sample"
+                                    # ],
                                 }
                                 test_visualization = build_visualization(
                                     **test_videos_log
@@ -549,7 +571,7 @@ def main(argv):
                                         )
                                     }
                                 )
-                epoch_mse.append(metrics["ag/loss/mse"].item())
+                # epoch_mse.append(metrics["ag/loss/mse"].item())
                 for k, v in metrics.items():
                     if k in eval_metrics:
                         eval_metrics[k].append(v)
@@ -614,7 +636,7 @@ def main(argv):
             optimizer.zero_grad()
             with autocast() if FLAGS.fp16 else ExitStack() as ac:
                 loss, preds, metrics = model(
-                    *inputs, compute_metrics=(batch_idx % 200 == 0)
+                    *inputs, compute_metrics=False #originally compute_metrics=(batch_idx % 200 == 0)
                 )
                 # print("predsss[rgb]: ", preds['rgb'].shape)
 
@@ -641,7 +663,7 @@ def main(argv):
 
             train_steps += 1
             train_losses.append(loss.item())
-            train_mse.append(metrics["loss/mse"].item())
+            # train_mse.append(metrics["loss/mse"].item())
             if batch_idx < num_batch_to_save:
                 if depth_predictor_kwargs:
                     with torch.no_grad():
@@ -671,7 +693,7 @@ def main(argv):
                     train_videos_log = {
                         "gt": batch["video"][:, 1:],
                         "pred": preds["rgb"],
-                        "rgb_loss": metrics["loss/mse_per_sample"],
+                        "rgb_loss": metrics["loss/seg_loss_per_sample"],
                     }
                     train_visualization = build_visualization(**train_videos_log)
                     wandb_log.update(
