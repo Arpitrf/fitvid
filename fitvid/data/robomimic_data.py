@@ -3,7 +3,7 @@ import numpy as np
 
 # from robomimic.utils.dataset import SequenceDataset
 from fitvid.data.og_dataset import SequenceDataset
-import robomimic.utils.obs_utils as ObsUtils
+# import robomimic.utils.obs_utils as ObsUtils
 from torch.utils.data import DataLoader, ConcatDataset
 
 # Hacky import, in newer versions of pytorch this is easier to import

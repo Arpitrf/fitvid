@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import lpips as lpips_module
+import matplotlib.pyplot as plt
 
 from fitvid.model.nvae import ModularEncoder, ModularDecoder, GraspedFCN
 from fitvid.model.depth_predictor import DepthPredictor
@@ -173,6 +174,14 @@ class GraspedModel(nn.Module):
                 h, h_target = hidden[:, i - 1], hidden[:, i]
                 
                 if i > self.n_past:
+                    # convert the predicted image to segmentation image again
+                    rgb_pred = rgb_pred.permute(0,2,3,1)
+                    logSoftmax = torch.nn.LogSoftmax(dim=-1)
+                    out = logSoftmax(rgb_pred)
+                    inds = torch.argmax(out, axis=-1)
+                    rgb_pred_seg_img = torch.nn.functional.one_hot(inds, num_classes=rgb_pred.shape[-1]).type(torch.cuda.FloatTensor)
+                    rgb_pred = rgb_pred_seg_img.permute(0,3,1,2)
+
                     h, _ = self.model_fitvid.encoder(rgb_pred)
                 
                 if self.stochastic:
@@ -401,6 +410,15 @@ class GraspedModel(nn.Module):
                 if i > self.n_past:
                     # print("using previous predicted value", i, self.n_past)
                     # input()
+
+                    # convert the predicted image to segmentation image again
+                    rgb_pred = rgb_pred.permute(0,2,3,1)
+                    logSoftmax = torch.nn.LogSoftmax(dim=-1)
+                    out = logSoftmax(rgb_pred)
+                    inds = torch.argmax(out, axis=-1)
+                    rgb_pred_seg_img = torch.nn.functional.one_hot(inds, num_classes=rgb_pred.shape[-1]).type(torch.cuda.FloatTensor)
+                    rgb_pred = rgb_pred_seg_img.permute(0,3,1,2)
+
                     h, _ = self.model_fitvid.encoder(rgb_pred)
                     grasped_state = torch.round(grasped_pred)
                 
@@ -511,8 +529,20 @@ class GraspedModel(nn.Module):
     def test(self, batch):
         """Predict the full video conditioned on the first self.n_past frames."""
         video, actions, grasped = batch["video"], batch["actions"], batch["grasped"]
-        # print("self.n_past: ", self.n_past)
-        # print("video, actions, grasped: ", video.shape, actions.shape, grasped.shape)
+        print("self.n_past: ", self.n_past)
+        print("video, actions, grasped: ", video.shape, actions.shape, grasped.shape)
+        
+        # # for visualizing the input image (debugging)
+        # temp = video.permute(0, 1, 3, 4, 2)
+        # temp = torch.argmax(temp, axis=-1).cpu()
+        # import matplotlib.pyplot as plt
+        # fig, ax = plt.subplots(2,2)
+        # ax[0][0].imshow(temp[0,0])
+        # ax[0][1].imshow(temp[13,0])
+        # ax[1][0].imshow(temp[27,0])
+        # ax[1][1].imshow(temp[146,0])
+        # plt.show()
+
         batch_size, video_len = video.shape[0], video.shape[1]
         action_len = actions.shape[1]
         pred_state_grasped = prior_state_grasped = None
@@ -539,8 +569,38 @@ class GraspedModel(nn.Module):
             if i <= self.n_past:
                 h = hidden[:, i - 1]
                 grasped_state = grasped[:, i - 1]
-                # print("11 g.shape: ", g.shape)
+                # for visualizing the next segmentation image prediction 
+                # init_image = torch.argmax(video.cpu().permute(0,2,3,1), axis=-1)
             if i > self.n_past:
+                
+                # convert the predicted image to segmentation image again
+                rgb_pred = rgb_pred.permute(0,2,3,1)
+                logSoftmax = torch.nn.LogSoftmax(dim=-1)
+                out = logSoftmax(rgb_pred)
+                inds = torch.argmax(out, axis=-1)
+                rgb_pred_seg_img = torch.nn.functional.one_hot(inds, num_classes=rgb_pred.shape[-1]).type(torch.cuda.FloatTensor)
+                rgb_pred = rgb_pred_seg_img.permute(0,3,1,2)
+
+                # visualizing the next segmentation image prediction
+                # print("action: ", actions[199])
+                # pred_image = torch.argmax(rgb_pred.cpu().permute(0,2,3,1), axis=-1)
+                # fig, ax = plt.subplots(3,3)
+                # ax[0][0].imshow(init_image[199])
+                # ax[0][1].imshow(pred_image[199])
+                # ax[0][2].imshow(pred_image[3])
+                # ax[1][0].imshow(pred_image[53])
+                # ax[1][1].imshow(pred_image[87])
+                # ax[1][2].imshow(pred_image[25])
+                # ax[2][0].imshow(pred_image[112])
+                # ax[2][1].imshow(pred_image[145])
+                # ax[2][2].imshow(pred_image[167])
+                # plt.show()
+                # fig, ax = plt.subplots(1,2)
+                # ax[0].imshow(init_image[199])
+                # ax[1].imshow(pred_image[199])
+                # plt.show()
+                # init_image = pred_image.clone()
+
                 h, _ = self.model_fitvid.encoder(rgb_pred)
                 grasped_state = torch.round(grasped_pred)
 
@@ -568,7 +628,7 @@ class GraspedModel(nn.Module):
             with torch.no_grad():
                 h_pred_rgb = torch.sigmoid(h_pred_rgb)
             rgb_pred = self.model_fitvid.decoder(h_pred_rgb[None, :], skips)[0]
-            
+
             rgb_preds.append(rgb_pred)
             grasped_preds.append(grasped_pred)
         

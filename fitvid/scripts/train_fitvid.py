@@ -57,7 +57,7 @@ flags.DEFINE_boolean(
 )  # changed
 flags.DEFINE_float("rgb_weight", 1, "Weight on rgb objective (default 1).")
 flags.DEFINE_float("grasped_weight", 0.01, "Weight on grasped objective (default 1).")
-flags.DEFINE_boolean("use_grasped", False, "Use a stochastic model.")
+flags.DEFINE_boolean("use_grasped", False, "Whether we are training the grasped model")
 flags.DEFINE_boolean(
     "fitvid_augment", False, "Use fitvid-style data augmentation."
 )  # changed

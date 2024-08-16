@@ -51,12 +51,13 @@ flags.DEFINE_boolean(
 flags.DEFINE_float("weight_decay", 0.0, "weight decay value")
 flags.DEFINE_float("adam_eps", 1e-8, "epsilon parameter for Adam optimizer")
 flags.DEFINE_boolean("stochastic", False, "Use a stochastic model.")
-flags.DEFINE_boolean("multistep", False, "Multi-step training.")  # changed
+flags.DEFINE_boolean("multistep", True, "Multi-step training.")  # changed
 flags.DEFINE_boolean(
     "fp16", False, "Use lower precision training for perf improvement."
 )  # changed
 flags.DEFINE_float("rgb_weight", 1, "Weight on rgb objective (default 1).")
 flags.DEFINE_float("grasped_weight", 1, "Weight on grasped objective (default 1).")
+flags.DEFINE_boolean("use_grasped", True, "Whether we are training the grasped model")
 flags.DEFINE_boolean(
     "fitvid_augment", False, "Use fitvid-style data augmentation."
 )  # changed
@@ -284,7 +285,9 @@ def main(argv):
         action_size=FLAGS.action_size,
         expand_decoder=FLAGS.expand,
         stochastic=FLAGS.stochastic,
-        video_channels=1 if FLAGS.only_depth else 3,
+        # changed by Arpit
+        # video_channels=1 if FLAGS.only_depth else 3,
+        video_channels=20,
         lecun_initialization=FLAGS.lecun_initialization,
     )
 
@@ -299,10 +302,11 @@ def main(argv):
         loss_weights=loss_weights,
         rgb_loss_type=FLAGS.rgb_loss_type,
         corr_wise=FLAGS.corr_wise,
+        use_grasped=FLAGS.use_grasped
     )
     print(f"Built FitVid model with {count_parameters(model_fitvid)} parameters!")
     # TODO: Load parameters for the fitvid model
-    pretrianed_model_fitvid_path = '/home/arpit/test_projects/vp2/vp2/pretrained_models/fitvid/model_det_900_epoch325'
+    pretrianed_model_fitvid_path = '/home/arpit/test_projects/vp2/vp2/pretrained_models/fitvid/model_epoch50_seg'
     model_fitvid.load_parameters(pretrianed_model_fitvid_path)
 
     model = GraspedModel(
@@ -330,7 +334,6 @@ def main(argv):
     )
     if checkpoint:
         model.load_parameters(checkpoint)
-    input()
 
     # model.setup_train_losses()
 
