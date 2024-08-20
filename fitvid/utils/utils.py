@@ -133,7 +133,7 @@ def partition_dataset_train_valid(dataset):
 
     if 'mask' in file:
         print("deleting")
-        input()
+        input("Press enter to delete")
         del file['mask']
         
     print("file.keys: ", file.keys())

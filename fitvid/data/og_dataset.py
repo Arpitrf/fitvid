@@ -7,6 +7,7 @@ from fitvid.utils.utils import pad_sequence
 from torchvision.transforms import Resize, InterpolationMode
 
 import torch.utils.data
+import matplotlib.pyplot as plt
 
 class SequenceDataset(torch.utils.data.Dataset):
     def __init__(
@@ -26,6 +27,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         filter_by_attribute=None,
         load_next_obs=True,
         image_size=None,
+        obs_info_keys=None,
     ):
         super(SequenceDataset, self).__init__()
 
@@ -37,6 +39,9 @@ class SequenceDataset(torch.utils.data.Dataset):
         # get all keys that needs to be fetched
         self.obs_keys = tuple(obs_keys)
         self.dataset_keys = tuple(dataset_keys)
+        self.obs_info_keys = None
+        if obs_info_keys is not None:
+            self.obs_info_keys = obs_info_keys
 
         self.n_frame_stack = frame_stack
         assert self.n_frame_stack >= 1
@@ -188,6 +193,83 @@ class SequenceDataset(torch.utils.data.Dataset):
         """
         return self.total_num_sequences
     
+    def extract_observations_info_from_hdf5(self, obs_info_strings, obs_info_shapes):
+        # Reconstruct original structure
+        idx = 0
+        reconstructed_data = []
+        for shape in obs_info_shapes:
+            sublist = []
+            for _ in range(shape):
+                sublist.append(list(map(lambda x: x.decode('utf-8'), obs_info_strings[idx:idx+2])))
+                idx += 2
+            reconstructed_data.append(sublist)
+
+        reconstructed_data = np.array(reconstructed_data, dtype=object)
+        # for i in range(len(reconstructed_data)):
+        #     print(i, np.array(reconstructed_data[i]).shape)
+        #     if i == 0:
+        #         print(reconstructed_data)
+        return reconstructed_data
+    
+    def obtain_gripper_obj_seg(self, img, img_info):
+        # img = f[f'data/{k}/observations/seg_instance_id'][0]
+        # img_info = np.array(f[f'data/{k}/observations_info']['seg_instance_id']).astype(str)[0]
+        parts_of_concern = [  
+            '/World/robot0/gripper_right_link/visuals',
+            '/World/robot0/gripper_right_right_finger_link/visuals',
+            '/World/robot0/gripper_right_left_finger_link/visuals',
+            '/World/coffee_table_fqluyq_0/base_link/visuals',
+            '/World/box/base_link/visuals',
+            '/World/plate/base_link/visuals',
+            '/World/apple/base_link/visuals',
+            '/World/table/base_link/visuals'
+        ]
+        ids_of_concern = []
+        for row in img_info:
+            key, val = row[0], row[1]
+            # print("val: ", val)
+            if val in parts_of_concern:
+                ids_of_concern.append(int(key))
+        
+        # # print("ids_of_concern: ", ids_of_concern)
+        # new_img = img.copy()
+        # for i in range(img.shape[0]):
+        #     for j in range(img.shape[1]):
+        #         if int(img[i][j]) not in ids_of_concern:
+        #             new_img[i][j] = 0
+                
+        # new_img = img.copy()
+        # new_img[np.argwhere(img not in ids_of_concern)] = 0
+        
+        # ids_of_concern = set(ids_of_concern)  # Convert to set for faster lookups, if not already
+        # print("ids_of_concern: ", ids_of_concern)
+        # Create a boolean mask where True indicates values in `ids_of_concern`
+        img = img.astype(int)
+        ids_of_concern = np.array(ids_of_concern).astype(int)
+        mask = np.isin(img, ids_of_concern)
+        # fig, ax = plt.subplots(1,2)
+        # ax[0].imshow(img)
+        # ax[1].imshow(mask)
+        # plt.show()
+        # Create a copy of the original image
+        new_img = img.copy()
+        # Set all elements not in `ids_of_concern` to 0
+        new_img[~mask] = 0
+        
+        return new_img
+    
+    def get_seg_instance_id_info(self, ep):
+        # Basically dealing with HDF5 limitation: handling inconsistent length arrays in observations_info/seg_instance_id
+        if 'seg_instance_id_strings' in self.hdf5_file[f'data/{ep}/observations_info'].keys():
+            seg_instance_id_strings = np.array(self.hdf5_file["data/{}/observations_info/seg_instance_id_strings".format(ep)])
+            seg_instance_id_shapes = np.array(self.hdf5_file["data/{}/observations_info/seg_instance_id_shapes".format(ep)])
+            seg_instance_id = self.extract_observations_info_from_hdf5(obs_info_strings=seg_instance_id_strings, 
+                                                                        obs_info_shapes=seg_instance_id_shapes)
+        else:
+            hd5key = "data/{}/observations_info/seg_instance_id".format(ep)
+            seg_instance_id = self.hdf5_file[hd5key]
+        return seg_instance_id
+    
     def get_dataset_for_ep(self, ep, key):
         """
         Helper utility to get a dataset for a specific demonstration.
@@ -217,17 +299,20 @@ class SequenceDataset(torch.utils.data.Dataset):
             if key == 'actions':
                 hd5key = "data/{}/{}/{}".format(ep, key, key)
             elif key == 'obs/rgb':
-                # print("in obs/rgbbbbbb")
-                # change later
-                # hd5key = "data/{}/observations/rgb".format(ep) 
-                hd5key = "data/{}/observations/gripper_obj_seg".format(ep) 
+                # hd5key = "data/{}/observations/gripper_obj_seg".format(ep) 
+                gripper_obj_seg_imgs = []
+                seg_instance_id_img = self.hdf5_file["data/{}/observations/seg_instance_id".format(ep) ]
+                seg_instance_id_info = self.get_seg_instance_id_info(ep)
+                for seq_num in range(seg_instance_id_img.shape[0]):
+                    gripper_obj_seg_img = self.obtain_gripper_obj_seg(seg_instance_id_img[seq_num], seg_instance_id_info[seq_num])
+                    gripper_obj_seg_imgs.append(gripper_obj_seg_img)
+                return np.array(gripper_obj_seg_imgs)
             elif key == 'grasped':
                 hd5key = "data/{}/extras/grasps".format(ep)
+            elif key == 'obs/seg_instance_id_info':
+                return self.get_seg_instance_id_info(ep)
+            
             ret = self.hdf5_file[hd5key]
-            # print("type(ret): ", type(ret))
-            # added by Arpit
-            # if key == 'obs/rgb':
-
         return ret
     
     def get_sequence_from_demo(self, demo_id, index_in_demo, keys, num_frames_to_stack=0, seq_length=1):
@@ -310,7 +395,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             data["pad_mask"] = pad_mask
         return data
     
-    def get_obs_sequence_from_demo(self, demo_id, index_in_demo, keys, num_frames_to_stack=0, seq_length=1, prefix="obs"):
+    def get_obs_sequence_from_demo(self, demo_id, index_in_demo, keys, num_frames_to_stack=0, seq_length=1, prefix="obs", obs_info_keys=None):
         """
         Extract a (sub)sequence of observation items from a demo given the @keys of the items.
 
@@ -332,15 +417,26 @@ class SequenceDataset(torch.utils.data.Dataset):
             num_frames_to_stack=num_frames_to_stack,
             seq_length=seq_length,
         )
-        # print("11obs[k].shape: ", obs['obs/rgb'].shape)
+        
+        if obs_info_keys is not None:
+            obs_info, pad_mask = self.get_sequence_from_demo(
+                demo_id,
+                index_in_demo=index_in_demo,
+                keys=tuple('{}/{}'.format(prefix, k) for k in obs_info_keys),
+                num_frames_to_stack=num_frames_to_stack,
+                seq_length=seq_length,
+            )
+        
         obs = {k.split('/')[1]: obs[k] for k in obs}  # strip the prefix
-        # print("22obs[k].shape: ", obs['rgb'].shape)
+        obs_info = {k.split('/')[1]: obs_info[k] for k in obs_info}  # strip the prefix
+
         if self.get_pad_mask:
             obs["pad_mask"] = pad_mask
+            obs_info["pad_mask"] = pad_mask
 
         # prepare image observations from dataset
         for k in obs:
-            # print("1obs[k].shape: ", obs[k].shape)   
+            # print("1obs[k].shape: ", obs[k].shape)  
 
             # uncomment later
             # obs[k] = obs[k][:, :, :, :3]
@@ -354,10 +450,71 @@ class SequenceDataset(torch.utils.data.Dataset):
             #         for j in range(w):
             #             label = obs[k][s, i, j]
             #             one_hot_encoded_image[s, i, j, label] = 1 
+
+            # Make all classes of the gripper (the fingers, body etc.) as one class
+            # temp_obs = obs[k].copy()
+            obs_info = obs_info['seg_instance_id_info']
+            # print("obs_info: ", obs_info, len(obs_info))
+            # if len(obs_info[0]) > 0:
+            # find the class of gripper_right_link
+            # TODO: find all classes in this seq len and make the initial class of gripper_right_link different from these 
+            unique_class_arr = np.unique(obs[k])
+            # print("unique_class_arr: ", unique_class_arr)
+            all_classes = set(range(20))
+            # Remove the elements in A from the set of all integers
+            available_classes = list(all_classes - set(unique_class_arr))
+            # Choose a random integer from the available integers
+            gripper_right_link_class = np.random.choice(available_classes)
+            # print("gripper_right_link_class: ", gripper_right_link_class)
+            # gripper_right_link_class = 19
+            
+            gripper_right_right_finger_link_class, gripper_right_left_finger_link_class = None, None  
+            for seq_num in range(len(obs_info)):
+                for cls in obs_info[seq_num]:
+                    if cls[1] == '/World/robot0/gripper_right_link/visuals':
+                        gripper_right_link_class = int(cls[0])
+                    if cls[1] == '/World/robot0/gripper_right_right_finger_link/visuals':
+                        gripper_right_right_finger_link_class = int(cls[0])
+                    if cls[1] == '/World/robot0/gripper_right_left_finger_link/visuals':
+                        gripper_right_left_finger_link_class = int(cls[0])
+
+            # print("gripper, right, left fingers: ", gripper_right_link_class, gripper_right_right_finger_link_class, gripper_right_left_finger_link_class)
+            # print("obs[k] shape: ", type(obs[k]), obs[k].dtype)
+            if gripper_right_right_finger_link_class is not None:
+                obs[k][obs[k] == gripper_right_right_finger_link_class] = gripper_right_link_class
+            if gripper_right_left_finger_link_class is not None:
+                obs[k][obs[k] == gripper_right_left_finger_link_class] = gripper_right_link_class
+
+            # temp2 = obs[k].copy()
+            obs_copy = obs[k].copy()
+
+            # randomize the classes
+            all_classes = np.arange(1,20)
+            for unique_class in unique_class_arr:
+                # keeping background always 0
+                if unique_class == 0:
+                    continue
+                new_cls = np.random.choice(all_classes)
+                # print("before: ", all_classes)
+                # print("current class: ", unique_class)
+                # print("new_cls: ", new_cls)
+                all_classes = np.delete(all_classes, np.argwhere(all_classes==new_cls))
+                # print("after: ", all_classes)
+                obs_copy[obs[k] == unique_class] = new_cls
+            obs[k] = obs_copy
+
+            # import matplotlib.pyplot as plt
+            # fig, ax = plt.subplots(1,3)
+            # ax[0].imshow(temp_obs[0])
+            # ax[1].imshow(temp2[0])
+            # ax[2].imshow(obs[k][0])
+            # plt.show()
+
             # vectorized: Very cool vectorization!!
             seq_len, h, w = obs[k].shape[0], obs[k].shape[1], obs[k].shape[2]
             one_hot_encoded_image = np.zeros((seq_len, h, w, 20), dtype=int)
             one_hot_encoded_image[np.arange(seq_len)[:, None, None], np.arange(h)[None, :, None], np.arange(w)[None, None, :], obs[k]] = 1
+
 
             # One-hot to categorical
             # categorical_array = np.argmax(one_hot_encoded_image, axis=-1)
@@ -434,7 +591,8 @@ class SequenceDataset(torch.utils.data.Dataset):
             keys=self.obs_keys,
             num_frames_to_stack=self.n_frame_stack - 1,
             seq_length=self.seq_length,
-            prefix="obs"
+            prefix="obs",
+            obs_info_keys=self.obs_info_keys
         )
 
         # print("meta_obs: ", meta['obs']['rgb'].shape)

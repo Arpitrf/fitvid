@@ -7,10 +7,13 @@ import torch
 
 # edit_and_merge_hdf5('/home/arpit/test_projects/OmniGibson/backup/dataset.hdf5', '/home/arpit/test_projects/OmniGibson/backup/dataset_new.hdf5')
 
-partition_dataset_train_valid('/home/arpit/test_projects/OmniGibson/dynamics_model_dataset_seg/dataset.hdf5')
+# partition_dataset_train_valid('/home/arpit/test_projects/OmniGibson/navigation_dataset_seg/dataset.hdf5')
 
 
-# f = h5py.File('/home/arpit/test_projects/OmniGibson/backup/dataset_new.hdf5', "r") 
+f = h5py.File('/home/arpit/test_projects/OmniGibson/navigation_dataset_seg/dataset.hdf5', "r")
+print("len: ", len(f['data'].keys()))
+for k in f['data'].keys():
+    print(np.array(f[f'data/{k}/observations_info/seg_instance_id_strings']))
 # f = h5py.File('/home/arpit/test_projects/OmniGibson/dynamics_model_dataset/dataset.hdf5', "r") 
 # print(len(f['data'].keys()))
 # print(f['mask']['train'])

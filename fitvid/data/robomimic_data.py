@@ -64,7 +64,11 @@ def get_data_loader(
     if normal:
         obs_keys = obs_keys + (f"{view}_normal",)
 
-    print("obs_keys: ", obs_keys)
+
+    # added by Arpit
+    obs_info_keys = tuple()
+    obs_info_keys = obs_info_keys + ('seg_instance_id_info',)
+    print("obs_keys, obs_info_keys: ", obs_keys, obs_info_keys)
 
     all_datasets = []
 
@@ -99,6 +103,7 @@ def get_data_loader(
         dataset = SequenceDataset(
             hdf5_path=dataset_path,
             obs_keys=obs_keys,  # observations we want to appear in batches
+            obs_info_keys=obs_info_keys,
             dataset_keys=(  # can optionally specify more keys here if they should appear in batches
                 "actions",
                 "grasped"
