@@ -147,7 +147,7 @@ def get_data_loader(
         sampler=None,  # no custom sampling logic (uniform sampling)
         batch_size=batch_size,
         shuffle=shuffle, 
-        num_workers=4,
+        num_workers=4, 
         drop_last=True,  # don't provide last batch in dataset pass if it's less than 100 in size
         collate_fn=collate_fn,
     )
@@ -180,10 +180,19 @@ def load_dataset_robomimic_torch(
     def prepare_data(input_batch):
         # prepare_data is a custom collate function which not only batches the data from the dataset, but also
         # creates the output dictionaries which contain keys "video" and "actions"
-        # print("input_batch: ", np.array(input_batch).shape)
+        # print("----", type(input_batch))
+        # print("input_batch: ", input_batch[0]['obs']['rgb'].shape, np.array(input_batch[0]['obs_info']).shape)
         xs = default_collate(input_batch)
-        # print("type(xs): ", type(xs), xs.keys())
-        # print("xssssssss: ", xs['actions'].shape)
+        # print("type(xs): ", xs.keys())
+        # xs['obs_info'] = np.array(xs['obs_info']).transpose(3, 0, 1, 2)
+        
+        # print("xssssssss: ", xs['obs']['rgb'].shape, xs['obs_info'].shape)
+        # print("ob_info_value: ", xs['obs_info'][0][0])
+        # import matplotlib.pyplot as plt
+        # img = xs['obs']['rgb'][0][0].permute(1,2,0)
+        # seg_img = torch.argmax(img, axis=-1)
+        # plt.imshow(seg_img)
+        # plt.show()
         
         # Added by Arpit to resolve the shape mismatch error (32, 145) x (142, 128)
         # print("actions: ", xs['actions'][1:3])
@@ -262,6 +271,9 @@ def load_dataset_robomimic_torch(
         xs["grasped"] = xs["grasped"].unsqueeze(2)
         # print("xs_grasped.shape: ", type(xs['grasped']), xs['grasped'].shape)
         data_dict['grasped'] = xs["grasped"]
+
+        # added by Arpit
+        # data_dict['obs_info'] = xs["obs_info"]
 
         if postprocess_fn:
             data_dict = postprocess_fn(data_dict)

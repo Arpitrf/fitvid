@@ -451,64 +451,145 @@ class SequenceDataset(torch.utils.data.Dataset):
             #             label = obs[k][s, i, j]
             #             one_hot_encoded_image[s, i, j, label] = 1 
 
-            # Make all classes of the gripper (the fingers, body etc.) as one class
+            # # Make all classes of the gripper (the fingers, body etc.) as one class
             # temp_obs = obs[k].copy()
-            obs_info = obs_info['seg_instance_id_info']
-            # print("obs_info: ", obs_info, len(obs_info))
-            # if len(obs_info[0]) > 0:
-            # find the class of gripper_right_link
-            # TODO: find all classes in this seq len and make the initial class of gripper_right_link different from these 
-            unique_class_arr = np.unique(obs[k])
-            # print("unique_class_arr: ", unique_class_arr)
-            all_classes = set(range(20))
-            # Remove the elements in A from the set of all integers
-            available_classes = list(all_classes - set(unique_class_arr))
-            # Choose a random integer from the available integers
-            gripper_right_link_class = np.random.choice(available_classes)
-            # print("gripper_right_link_class: ", gripper_right_link_class)
-            # gripper_right_link_class = 19
+            # obs_info = obs_info['seg_instance_id_info']
+            # # print("obs_info: ", obs_info, len(obs_info))
+            # # if len(obs_info[0]) > 0:
+            # # find the class of gripper_right_link
+            # # TODO: find all classes in this seq len and make the initial class of gripper_right_link different from these 
+            # unique_class_arr = np.unique(obs[k])
+            # # print("unique_class_arr: ", unique_class_arr)
+            # all_classes = set(range(20))
+            # # Remove the elements in A from the set of all integers
+            # available_classes = list(all_classes - set(unique_class_arr))
+            # # Choose a random integer from the available integers
+            # gripper_right_link_class = np.random.choice(available_classes)
+            # # print("gripper_right_link_class: ", gripper_right_link_class)
+            # # gripper_right_link_class = 19
             
-            gripper_right_right_finger_link_class, gripper_right_left_finger_link_class = None, None  
-            for seq_num in range(len(obs_info)):
-                for cls in obs_info[seq_num]:
-                    if cls[1] == '/World/robot0/gripper_right_link/visuals':
-                        gripper_right_link_class = int(cls[0])
-                    if cls[1] == '/World/robot0/gripper_right_right_finger_link/visuals':
-                        gripper_right_right_finger_link_class = int(cls[0])
-                    if cls[1] == '/World/robot0/gripper_right_left_finger_link/visuals':
-                        gripper_right_left_finger_link_class = int(cls[0])
+            # gripper_right_right_finger_link_class, gripper_right_left_finger_link_class = None, None  
+            # obs_info_copy = obs_info.copy()
+            # for seq_num in range(len(obs_info)):
+            #     for i, cls in enumerate(obs_info[seq_num]):
+            #         if cls[1] == '/World/robot0/gripper_right_link/visuals':
+            #             gripper_right_link_class = int(cls[0])
+            #         if cls[1] == '/World/robot0/gripper_right_right_finger_link/visuals':
+            #             gripper_right_right_finger_link_class = int(cls[0])
+            #         if cls[1] == '/World/robot0/gripper_right_left_finger_link/visuals':
+            #             gripper_right_left_finger_link_class = int(cls[0])
 
-            # print("gripper, right, left fingers: ", gripper_right_link_class, gripper_right_right_finger_link_class, gripper_right_left_finger_link_class)
-            # print("obs[k] shape: ", type(obs[k]), obs[k].dtype)
-            if gripper_right_right_finger_link_class is not None:
-                obs[k][obs[k] == gripper_right_right_finger_link_class] = gripper_right_link_class
-            if gripper_right_left_finger_link_class is not None:
-                obs[k][obs[k] == gripper_right_left_finger_link_class] = gripper_right_link_class
-
+            # # print("gripper, right, left fingers: ", gripper_right_link_class, gripper_right_right_finger_link_class, gripper_right_left_finger_link_class)
+            # # print("obs[k] shape: ", type(obs[k]), obs[k].dtype)
+            # if gripper_right_right_finger_link_class is not None:
+            #     obs[k][obs[k] == gripper_right_right_finger_link_class] = gripper_right_link_class
+            # if gripper_right_left_finger_link_class is not None:
+            #     obs[k][obs[k] == gripper_right_left_finger_link_class] = gripper_right_link_class
+                
+            # for seq_num in range(len(obs_info)):
+            #     for i, cls in enumerate(obs_info[seq_num]):
+            #         if cls[1] == '/World/robot0/gripper_right_link/visuals':
+            #             obs_info_copy[seq_num][i][0] = gripper_right_link_class
+            #         if cls[1] == '/World/robot0/gripper_right_right_finger_link/visuals':
+            #             obs_info_copy[seq_num][i][0] = gripper_right_link_class
+            #         if cls[1] == '/World/robot0/gripper_right_left_finger_link/visuals':
+            #             obs_info_copy[seq_num][i][0] = gripper_right_link_class
+            
             # temp2 = obs[k].copy()
+            # obs_copy = obs[k].copy()
+
+            # # randomize the classes
+            # old_to_new_class_dict = {i: i for i in range(20)}
+            # all_classes = np.arange(1,20)
+            # for unique_class in unique_class_arr:
+            #     # keeping background always 0
+            #     if unique_class == 0:
+            #         continue
+            #     new_cls = np.random.choice(all_classes)
+            #     # print("before: ", all_classes)
+            #     # print("current class: ", unique_class)
+            #     # print("new_cls: ", new_cls)
+            #     all_classes = np.delete(all_classes, np.argwhere(all_classes==new_cls))
+            #     # print("after: ", all_classes)
+            #     obs_copy[obs[k] == unique_class] = new_cls
+            #     old_to_new_class_dict[unique_class] = new_cls
+            # obs[k] = obs_copy
+
+            # Make fixed class
+            obs_info_with_new_cls_padded = []
             obs_copy = obs[k].copy()
+            obs_info = obs_info['seg_instance_id_info']
+            old_to_new_class_dict = {i: i for i in range(20)}
+            fixed_classes = {
+                '/World/robot0/gripper_right_link/visuals': 1,
+                '/World/robot0/gripper_right_right_finger_link/visuals': 1,
+                '/World/robot0/gripper_right_left_finger_link/visuals': 1,
+                # '/World/coffee_table_fqluyq_0/base_link/visuals',
+                # '/World/box/base_link/visuals',
+                '/World/table/base_link/visuals': 2,
+                '/World/apple/base_link/visuals': 3,
+                '/World/plate/base_link/visuals': 4,
+            }
+            # print("obs_info shape: ", obs_info.shape)
+            for class_name, target_class_value in fixed_classes.items():
+                found_class = False
+                class_value_in_current_episode = -1
+                # class_value_in_current_frame = obs_info[0, obs_info[:, 0] == class_name, 1]
+                for seq_num in range(len(obs_info)):
+                    for i, cls in enumerate(obs_info[seq_num]):
+                        # print("cls[1], class_name: ", cls[1], class_name)
+                        if cls[1] == class_name:
+                            # print("cls[1], class_name: ", cls[1], class_name)
+                            class_value_in_current_episode = int(cls[0])
+                            found_class = True
+                            break
+                    if found_class:
+                        break
 
-            # randomize the classes
-            all_classes = np.arange(1,20)
-            for unique_class in unique_class_arr:
-                # keeping background always 0
-                if unique_class == 0:
-                    continue
-                new_cls = np.random.choice(all_classes)
-                # print("before: ", all_classes)
-                # print("current class: ", unique_class)
-                # print("new_cls: ", new_cls)
-                all_classes = np.delete(all_classes, np.argwhere(all_classes==new_cls))
-                # print("after: ", all_classes)
-                obs_copy[obs[k] == unique_class] = new_cls
-            obs[k] = obs_copy
-
-            # import matplotlib.pyplot as plt
-            # fig, ax = plt.subplots(1,3)
-            # ax[0].imshow(temp_obs[0])
-            # ax[1].imshow(temp2[0])
-            # ax[2].imshow(obs[k][0])
+                if class_value_in_current_episode != -1:
+                    # print("class_name, current class value: ", class_name, class_value_in_current_episode)
+                    obs_copy[obs[k] == class_value_in_current_episode] = target_class_value
+            # fig, ax = plt.subplots(1,2)
+            # ax[0].imshow(obs[k][0])
+            # ax[1].imshow(obs_copy[0])
             # plt.show()
+
+            # print("old_to_new_class_dict:",old_to_new_class_dict)
+            
+            # obs_info_with_new_cls = obs_info_copy.copy()
+            # for seq_num in range(len(obs_info_copy)):
+            #     for i, cls in enumerate(obs_info_copy[seq_num]):
+            #         if int(cls[0]) in old_to_new_class_dict.keys():
+            #             obs_info_with_new_cls[seq_num][i][0] = str(old_to_new_class_dict[int(cls[0])])
+
+            # # make obs_info a constant sized array (seq_len, 20, 2)
+            # obs_info_with_new_cls_padded = []
+            # target_length=20
+            # for seq in obs_info_with_new_cls:
+            #     # Calculate the number of padding elements needed
+            #     padding_needed = target_length - len(seq)
+            #     # print("padding_needed: ", padding_needed)
+                
+            #     # Create the padding array with ['', ''] repeated for the padding needed
+            #     padding = [['', '']] * padding_needed
+            #     # print("dtypes: ", np.array(seq).dtype, np.array(padding).dtype, type(seq[0][0]))
+                
+            #     # Append the padding to the sequence
+            #     padded_seq = np.vstack([seq, padding])
+            #     # print("padded_seq: ", padded_seq.shape)
+                
+            #     obs_info_with_new_cls_padded.append(padded_seq)
+            
+            # obs_info_with_new_cls_padded = np.array(obs_info_with_new_cls_padded)
+            # # print("obs_info_with_new_cls_padded: ", obs_info_with_new_cls_padded)
+            # # print("obs_info_with_new_cls: ", obs_info_with_new_cls)
+            # # input()
+            # # import matplotlib.pyplot as plt
+            # # fig, ax = plt.subplots(1,3)
+            # # ax[0].imshow(temp_obs[0])
+            # # ax[1].imshow(temp2[0])
+            # # ax[2].imshow(obs[k][0])
+            # # plt.show()
 
             # vectorized: Very cool vectorization!!
             seq_len, h, w = obs[k].shape[0], obs[k].shape[1], obs[k].shape[2]
@@ -545,7 +626,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         # temp = ObsUtils.process_obs_dict(obs)
         # print("obs: ", np.array(temp['agentview_shift_2_image']).shape, type(obs['agentview_shift_2_image']), type(obs['agentview_shift_2_image'][0][0][0][0]))
 
-        return obs
+        return obs, obs_info_with_new_cls_padded
     
     def __getitem__(self, index):
         """
@@ -585,7 +666,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             seq_length=self.seq_length
         )
 
-        meta["obs"] = self.get_obs_sequence_from_demo(
+        meta["obs"], obs_info = self.get_obs_sequence_from_demo(
             demo_id,
             index_in_demo=index_in_demo,
             keys=self.obs_keys,
@@ -595,7 +676,10 @@ class SequenceDataset(torch.utils.data.Dataset):
             obs_info_keys=self.obs_info_keys
         )
 
-        # print("meta_obs: ", meta['obs']['rgb'].shape)
+        # print("meta_obs: ", meta.keys(), type(meta['obs']['rgb']), type(meta['actions']), type(meta['grasped']))
+        # print("obs_info: ", np.array(obs_info).shape, type(obs_info[0][0][0]))
+        # meta['obs_info'] = obs_info.tolist()
+
         # breakpoint()
         # print("11meta_obs: ", meta['obs']['rgb'].shape, meta['obs']['rgb'][0,:,0,0])
         #TODO: commented out resize but bring it back

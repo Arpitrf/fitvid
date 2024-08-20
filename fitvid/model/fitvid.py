@@ -866,6 +866,7 @@ class FitVid(nn.Module):
         actions,
         grasped,
         segmentation=None,
+        video_info=None,
         depth=None,
         normal=None,
         compute_metrics=False,
@@ -910,6 +911,7 @@ class FitVid(nn.Module):
             grasped_preds,
             grasped_gt,
             segmentation=segmentation,
+            video_info=video_info,
             depth=depth,
             normal=normal,
             compute_metrics=compute_metrics,
@@ -922,9 +924,12 @@ class FitVid(nn.Module):
         )
         return loss, preds, metrics
 
-    def compute_seg_loss(self, preds, target):
+    def compute_seg_loss(self, preds, target, video_info=None):
         print("preds, target shapes: ", preds.shape, target.shape)
-        criterion = nn.CrossEntropyLoss()
+        weight = torch.ones(20)
+        weight[3] = 20.0
+        weight = weight.to(device='cuda')
+        criterion = nn.CrossEntropyLoss(weight)
         bs, seq_len, h, w = preds.shape[0], preds.shape[1], preds.shape[3], preds.shape[4]
         # convert target from one-hot to seg value
         target = target.permute(0,1,3,4,2)
@@ -944,7 +949,7 @@ class FitVid(nn.Module):
         for t in range(seq_len):
             seg_loss += criterion(preds[:, t], target_seg[:, t])
             seg_loss_per_sample.append(seg_loss)
-            print("seg_loss: ", seg_loss)
+            # print("seg_loss: ", seg_loss)
         seg_loss /= seq_len  # Average loss over sequence length
         seg_loss_per_sample = torch.Tensor(seg_loss_per_sample)
         return seg_loss, seg_loss_per_sample
@@ -957,6 +962,7 @@ class FitVid(nn.Module):
         grasped_preds,
         grasped_gt,
         segmentation=None,
+        video_info=None,
         depth=None,
         normal=None,
         compute_metrics=False,
@@ -978,6 +984,7 @@ class FitVid(nn.Module):
                 seg_loss, seg_loss_per_sample = self.compute_seg_loss(
                         preds["rgb"],
                         video[:, 1:],
+                        video_info
                     )
                 total_loss += seg_loss * weight
                 metrics["loss/seg_loss_per_sample"] = seg_loss_per_sample
@@ -1128,9 +1135,9 @@ class FitVid(nn.Module):
                     out = logSoftmax(pred)
                     inds = torch.argmax(out, axis=-1)
                     pred_seg_img = torch.nn.functional.one_hot(inds, num_classes=pred.shape[-1]).type(torch.cuda.FloatTensor)
-                    print("pred_seg_img.shape: ", pred_seg_img.shape)
+                    # print("pred_seg_img.shape: ", pred_seg_img.shape)
                     pred = pred_seg_img.permute(0,3,1,2)
-                    print("pred.shape: ", pred.shape)
+                    # print("pred.shape: ", pred.shape)
                     
                     h, _ = self.encoder(pred)
                 if self.stochastic:
@@ -1283,9 +1290,9 @@ class FitVid(nn.Module):
                     out = logSoftmax(pred)
                     inds = torch.argmax(out, axis=-1)
                     pred_seg_img = torch.nn.functional.one_hot(inds, num_classes=pred.shape[-1]).type(torch.cuda.FloatTensor)
-                    print("pred_seg_img.shape: ", pred_seg_img.shape)
+                    # print("pred_seg_img.shape: ", pred_seg_img.shape)
                     pred = pred_seg_img.permute(0,3,1,2)
-                    print("pred.shape: ", pred.shape)
+                    # print("pred.shape: ", pred.shape)
 
                     h, _ = self.encoder(pred)
                     # grasped_state = torch.round()

@@ -461,7 +461,7 @@ def main(argv):
             print(f"Total train batches: {total_train_batches}")
             for iter_item in enumerate(tqdm(test_data_loader)):
                 test_batch_idx, batch = iter_item
-                # print("batchhhhhhhh: ", batch.keys())
+                print("batchhhhhhhh: ", batch.keys())
                 print("batch[video]: ", batch['video'].shape, batch['grasped'].shape, batch['actions'].shape)
 
                 # # remove later
