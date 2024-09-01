@@ -529,8 +529,8 @@ class GraspedModel(nn.Module):
     def test(self, batch):
         """Predict the full video conditioned on the first self.n_past frames."""
         video, actions, grasped = batch["video"], batch["actions"], batch["grasped"]
-        print("self.n_past: ", self.n_past)
-        print("video, actions, grasped: ", video.shape, actions.shape, grasped.shape)
+        # print("self.n_past: ", self.n_past)
+        # print("video, actions, grasped: ", video.shape, actions.shape, grasped.shape)
         
         # # for visualizing the input image (debugging)
         # temp = video.permute(0, 1, 3, 4, 2)
@@ -582,6 +582,7 @@ class GraspedModel(nn.Module):
                 rgb_pred = rgb_pred_seg_img.permute(0,3,1,2)
 
                 # visualizing the next segmentation image prediction
+                # print("rgb_pred shape: ", rgb_pred.shape)
                 # print("action: ", actions[199])
                 # pred_image = torch.argmax(rgb_pred.cpu().permute(0,2,3,1), axis=-1)
                 # fig, ax = plt.subplots(3,3)
@@ -929,7 +930,7 @@ class FitVid(nn.Module):
         weight = torch.ones(20)
         weight[3] = 20.0
         weight = weight.to(device='cuda')
-        criterion = nn.CrossEntropyLoss(weight)
+        criterion = nn.CrossEntropyLoss(weight=weight)
         bs, seq_len, h, w = preds.shape[0], preds.shape[1], preds.shape[3], preds.shape[4]
         # convert target from one-hot to seg value
         target = target.permute(0,1,3,4,2)

@@ -442,7 +442,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             # obs[k] = obs[k][:, :, :, :3]
             # obs[k] = np.transpose(obs[k], (0, 3, 1, 2))
 
-            # # Categorical to one-hot 
+            # # Remove later: Categorical to one-hot 
             # seq_len, h, w = obs[k].shape[0], obs[k].shape[1], obs[k].shape[2]
             # one_hot_encoded_image = np.zeros((seq_len, h, w, 20), dtype=int)
             # for s in range(seq_len):
@@ -451,6 +451,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             #             label = obs[k][s, i, j]
             #             one_hot_encoded_image[s, i, j, label] = 1 
 
+            # OPTION 1: Randomizing the classes of all objects
             # # Make all classes of the gripper (the fingers, body etc.) as one class
             # temp_obs = obs[k].copy()
             # obs_info = obs_info['seg_instance_id_info']
@@ -515,7 +516,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             #     old_to_new_class_dict[unique_class] = new_cls
             # obs[k] = obs_copy
 
-            # Make fixed class
+            # OPTION 2: Make fixed classes for each object (useful when need different weights for different classes in the cross entropy loss)
             obs_info_with_new_cls_padded = []
             obs_copy = obs[k].copy()
             obs_info = obs_info['seg_instance_id_info']
@@ -553,6 +554,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             # ax[0].imshow(obs[k][0])
             # ax[1].imshow(obs_copy[0])
             # plt.show()
+            obs[k] = obs_copy
 
             # print("old_to_new_class_dict:",old_to_new_class_dict)
             
@@ -562,7 +564,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             #         if int(cls[0]) in old_to_new_class_dict.keys():
             #             obs_info_with_new_cls[seq_num][i][0] = str(old_to_new_class_dict[int(cls[0])])
 
-            # # make obs_info a constant sized array (seq_len, 20, 2)
+            # # Hack for hdf5: make obs_info a constant sized array (seq_len, 20, 2)
             # obs_info_with_new_cls_padded = []
             # target_length=20
             # for seq in obs_info_with_new_cls:
