@@ -4,7 +4,7 @@ __pycache__/
 output/
 run_*
 wandb/
-temp/
+temp*/
 dynamics_model_dataset/
 medium_grasp_dataset/
 small_grasp_dataset/

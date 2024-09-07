@@ -76,7 +76,7 @@ flags.DEFINE_integer(
     "num_base_filters", 32, "num_filters = num_base_filters * 2^layer_index."
 )  # 64
 flags.DEFINE_integer("expand", 1, "multiplier on decoder's num_filters.")  # 4
-flags.DEFINE_integer("action_size", 7, "number of actions")  # 4
+flags.DEFINE_integer("action_size", 10, "number of actions")  # 4
 flags.DEFINE_string(
     "skip_type", "residual", "skip type: residual, concat, no_skip, pixel_residual"
 )  # residual
@@ -463,19 +463,6 @@ def main(argv):
                 test_batch_idx, batch = iter_item
                 print("batchhhhhhhh: ", batch.keys())
                 print("batch[video]: ", batch['video'].shape, batch['grasped'].shape, batch['actions'].shape)
-
-                # # remove later
-                # gt = batch['video'].permute(0,1,3,4,2)
-                # bs, seq_len, h, w = gt.shape[0], gt.shape[1], gt.shape[2], gt.shape[3]
-                # for b in range(bs):
-                #     for s in range(seq_len):
-                #         for i in range(h):
-                #             for j in range(w):
-                #                 gt_label = np.where(gt[b, s, i, j] == 1.0)
-                #                 if len(gt_label[0]) == 0:
-                #                     print("gt[b, s, i, j]: ",gt[b, s, i, j])
-                #                     print("wowwwwwwwwwwwww")
-                # input()
                 
                 batch = dict_to_cuda(batch)
                 with autocast() if FLAGS.fp16 else ExitStack() as ac:

@@ -147,7 +147,7 @@ def get_data_loader(
         sampler=None,  # no custom sampling logic (uniform sampling)
         batch_size=batch_size,
         shuffle=shuffle, 
-        num_workers=4, 
+        num_workers=4,  
         drop_last=True,  # don't provide last batch in dataset pass if it's less than 100 in size
         collate_fn=collate_fn,
     )

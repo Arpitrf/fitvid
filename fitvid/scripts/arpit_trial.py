@@ -1,13 +1,13 @@
-from fitvid.utils.utils import edit_and_merge_hdf5, partition_dataset_train_valid
+from fitvid.utils.hdf5_utils import edit_and_merge_hdf5, partition_dataset_train_valid
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 np.set_printoptions(suppress=True, precision=3)
 import torch
 
-# edit_and_merge_hdf5('/home/arpit/test_projects/OmniGibson/backup/dataset.hdf5', '/home/arpit/test_projects/OmniGibson/backup/dataset_new.hdf5')
+# edit_and_merge_hdf5('/home/arpit/test_projects/OmniGibson/pick_and_place_data/dataset.hdf5', '/home/arpit/test_projects/OmniGibson/pick_data/dataset.hdf5')
 
-partition_dataset_train_valid('/home/arpit/test_projects/OmniGibson/navigation_dataset_seg/dataset.hdf5')
+# partition_dataset_train_valid('/home/arpit/test_projects/OmniGibson/pick_data/dataset.hdf5')
 
 
 # f = h5py.File('/home/arpit/test_projects/OmniGibson/navigation_dataset_seg/dataset.hdf5', "r")

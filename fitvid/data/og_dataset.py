@@ -222,9 +222,11 @@ class SequenceDataset(torch.utils.data.Dataset):
             '/World/box/base_link/visuals',
             '/World/plate/base_link/visuals',
             '/World/apple/base_link/visuals',
-            '/World/table/base_link/visuals'
+            '/World/table/base_link/visuals',
+            '/World/mixing_bowl/base_link/visuals'
         ]
         ids_of_concern = []
+        # print("img_info: ", img_info)
         for row in img_info:
             key, val = row[0], row[1]
             # print("val: ", val)
@@ -265,9 +267,12 @@ class SequenceDataset(torch.utils.data.Dataset):
             seg_instance_id_shapes = np.array(self.hdf5_file["data/{}/observations_info/seg_instance_id_shapes".format(ep)])
             seg_instance_id = self.extract_observations_info_from_hdf5(obs_info_strings=seg_instance_id_strings, 
                                                                         obs_info_shapes=seg_instance_id_shapes)
+            # print("111: ", seg_instance_id.shape)
         else:
             hd5key = "data/{}/observations_info/seg_instance_id".format(ep)
-            seg_instance_id = self.hdf5_file[hd5key]
+            # seg_instance_id = self.hdf5_file[hd5key]
+            seg_instance_id = np.array(self.hdf5_file[hd5key]).astype(str)
+            # print("222: ", seg_instance_id.shape)
         return seg_instance_id
     
     def get_dataset_for_ep(self, ep, key):
@@ -436,6 +441,10 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         # prepare image observations from dataset
         for k in obs:
+            # print("--", obs[k].shape)
+            # plt.imshow(obs[k][0])
+            # plt.show()
+
             # print("1obs[k].shape: ", obs[k].shape)  
 
             # uncomment later
@@ -521,15 +530,23 @@ class SequenceDataset(torch.utils.data.Dataset):
             obs_copy = obs[k].copy()
             obs_info = obs_info['seg_instance_id_info']
             old_to_new_class_dict = {i: i for i in range(20)}
+            # fixed_classes = {
+            #     '/World/robot0/gripper_right_link/visuals': 1,
+            #     '/World/robot0/gripper_right_right_finger_link/visuals': 1,
+            #     '/World/robot0/gripper_right_left_finger_link/visuals': 1,
+            #     # '/World/coffee_table_fqluyq_0/base_link/visuals',
+            #     # '/World/box/base_link/visuals',
+            #     '/World/table/base_link/visuals': 2,
+            #     '/World/apple/base_link/visuals': 3,
+            #     '/World/plate/base_link/visuals': 4,
+            # }
             fixed_classes = {
                 '/World/robot0/gripper_right_link/visuals': 1,
                 '/World/robot0/gripper_right_right_finger_link/visuals': 1,
                 '/World/robot0/gripper_right_left_finger_link/visuals': 1,
-                # '/World/coffee_table_fqluyq_0/base_link/visuals',
-                # '/World/box/base_link/visuals',
-                '/World/table/base_link/visuals': 2,
-                '/World/apple/base_link/visuals': 3,
-                '/World/plate/base_link/visuals': 4,
+                '/World/coffee_table_fqluyq_0/base_link/visuals': 2,
+                '/World/box/base_link/visuals': 3,
+                '/World/mixing_bowl/base_link/visuals': 4 
             }
             # print("obs_info shape: ", obs_info.shape)
             for class_name, target_class_value in fixed_classes.items():

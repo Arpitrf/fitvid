@@ -928,9 +928,10 @@ class FitVid(nn.Module):
     def compute_seg_loss(self, preds, target, video_info=None):
         print("preds, target shapes: ", preds.shape, target.shape)
         weight = torch.ones(20)
-        weight[3] = 20.0
+        weight[3] = 10.0
         weight = weight.to(device='cuda')
         criterion = nn.CrossEntropyLoss(weight=weight)
+        # criterion = nn.CrossEntropyLoss()
         bs, seq_len, h, w = preds.shape[0], preds.shape[1], preds.shape[3], preds.shape[4]
         # convert target from one-hot to seg value
         target = target.permute(0,1,3,4,2)
