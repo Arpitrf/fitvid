@@ -11,7 +11,7 @@ To train the grasped model:
 1. separate_grasped_model_seg: to use segmentation images
 2. separate_grasped_model: to use rgb images
 ```
-python fitvid/scripts/train_grasped_model.py --output_dir run_seg_grasped --dataset_file /home/arpit/test_projects/OmniGibson/dynamics_model_dataset_seg/dataset.hdf5 --wandb_online
+python fitvid/scripts/train_grasped_model.py --output_dir run_seg_grasped --dataset_file /home/arpit/test_projects/OmniGibson/dynamics_model_dataset_seg/dataset.hdf5 --pretrained_video_model /home/arpit/test_projects/fitvid/run_test_seg/model_epoch50_seg --wandb_online 
 ```
 
 # FitVid Video Prediction Model
